@@ -85,9 +85,6 @@ platform_load_image(void);
 bool
 platform_marshal(size_t chunk_no, uint8_t** data, uint16_t* len);
 
-void
-platform_clear_input_buffer(void);
-
 
 
 

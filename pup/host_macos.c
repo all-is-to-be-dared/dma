@@ -97,7 +97,10 @@ open_serial_dev(const char* path, uint32_t baud)
 {
   int fd;
   struct termios tios;
-  speed_t speed = baud;
+  speed_t speed;
+  unsigned long latency;
+
+  speed = baud;
 
   // want open to be nonblocking (but not subsequent operations), so we clear O_NONBLOCK later on
   fd = open(path, O_RDWR | O_NOCTTY | O_NONBLOCK);
@@ -261,10 +264,21 @@ open_serial_dev(const char* path, uint32_t baud)
     goto error;
   }
 
-  if(!opts.is_pty) {
+  if (!opts.is_pty) {
     if (ioctl(fd, IOSSIOSPEED, &speed) == -1) {
       fprintf(stderr,
               "%s: failed to set baud rate for %s to %d: %s (%d)\n",
+              opts.self,
+              path,
+              baud,
+              strerror(errno),
+              errno);
+      goto error;
+    }
+    latency = 1UL;
+    if (ioctl(fd, IOSSDATALAT, &latency) == -1) {
+      fprintf(stderr,
+              "%s: failed to set input latency for %s to %d: %s (%d)\n",
               opts.self,
               path,
               baud,
@@ -290,7 +304,7 @@ error:
 
 
 static enum find_status
-find_serial_device_auto(int *fd, uint32_t baud)
+find_serial_device_auto(int* fd, uint32_t baud)
 {
   return FIND_NXDEV;
 }
@@ -299,7 +313,7 @@ find_serial_device_auto(int *fd, uint32_t baud)
 
 
 static enum find_status
-find_serial_device_fuzzy(const char* string, int *fd, uint32_t baud)
+find_serial_device_fuzzy(const char* string, int* fd, uint32_t baud)
 {
   return FIND_NXDEV;
 }
@@ -315,13 +329,13 @@ find_serial_device_with_path(const char* dev, int* fd, uint32_t baud)
 
   r = stat(dev, &buf);
   if (!r) {
-    // file exists
-    #pragma GCC diagnostic push
-    #pragma GCC diagnostic ignored "-Wdeprecated-octal-literals"
+// file exists
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-octal-literals"
     if (!S_ISCHR(buf.st_mode)) {
       return FIND_NOT_CHR;
     }
-    #pragma GCC diagnostic pop
+#pragma GCC diagnostic pop
   }
   r = open_serial_dev(dev, baud);
 
@@ -339,7 +353,7 @@ find_serial_device_with_path(const char* dev, int* fd, uint32_t baud)
 enum find_status
 find_serial_device(const char* dev, int* fd, uint32_t baud)
 {
-  if(!dev) {
+  if (!dev) {
     return find_serial_device_auto(fd, baud);
   } else if (*dev == '@') {
     return find_serial_device_fuzzy(dev + 1, fd, baud);
@@ -355,25 +369,30 @@ bool
 platform_can_read(void)
 {
   int available;
-  if(ioctl(opts.dev_fd, FIONREAD, &available) == -1) {
-    fprintf(stderr, "%s: failed to get TTY input buffer level: %s (%d)\n", opts.self, strerror(errno), errno);
+  if (ioctl(opts.dev_fd, FIONREAD, &available) == -1) {
+    fprintf(stderr,
+            "%s: failed to get TTY input buffer level: %s (%d)\n",
+            opts.self,
+            strerror(errno),
+            errno);
     exit(1);
   }
-  
+
   return available > 0;
 }
 
 uint8_t
-platform_read(void) {
+platform_read(void)
+{
   uint8_t buf;
   int r;
-  while((r = read(opts.dev_fd, &buf, 1)) == -1) {
-    if(errno == EAGAIN)
+  while ((r = read(opts.dev_fd, &buf, 1)) == -1) {
+    if (errno == EAGAIN)
       continue;
     fprintf(stderr, "%s: failed to read from TTY: %s (%d)\n", opts.self, strerror(errno), errno);
     exit(1);
   }
-  if(!r) {
+  if (!r) {
     fprintf(stderr, "%s: TTY disconnected\n", opts.self);
     exit(1);
   }
@@ -381,27 +400,29 @@ platform_read(void) {
 }
 
 void
-platform_write(uint8_t c) {
+platform_write(uint8_t c)
+{
   // printf("host: platform_write: '%c' (%d)\n", c, c);
-  if(write(opts.dev_fd, &c, 1) == -1) {
+  if (write(opts.dev_fd, &c, 1) == -1) {
     fprintf(stderr, "%s: failed to write to TTY: %s (%d)\n", opts.self, strerror(errno), errno);
     exit(1);
   }
 }
 
 uint64_t
-platform_time(void) {
+platform_time(void)
+{
   struct timespec tp;
   uint64_t micros;
 
-  if(clock_gettime(CLOCK_MONOTONIC_RAW, &tp) == -1) {
+  if (clock_gettime(CLOCK_MONOTONIC_RAW, &tp) == -1) {
     fprintf(stderr, "%s: failed to get time: %s (%d)\n", opts.self, strerror(errno), errno);
     exit(1);
   }
 
   micros = tp.tv_nsec / 1'000ull;
   micros += tp.tv_sec * 1'000'000ull;
-  
+
   return micros;
 }
 
@@ -410,7 +431,6 @@ platform_clear_input_buffer(void)
 {
   tcflush(opts.dev_fd, TCIFLUSH);
 }
-
 
 
 

@@ -164,7 +164,7 @@ hook_passthru(uint8_t c)
 
 
 
-static uint8_t staging[0x1'0000];
+static uint8_t staging[0xffff];
 
 
 

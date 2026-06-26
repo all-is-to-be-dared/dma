@@ -6,6 +6,7 @@
 
 #if !NO_DOWNLOAD
 #include "printf/printf.h"
+#include "bcm2835/platform.h"
 #define SIDE BOOT
 #elif !NO_UPLOAD
 #include <stdio.h>
@@ -137,7 +138,15 @@ fsm_recv(mframe_t* frame)
   uint32_t rem_body, body_size;
   uint8_t c, *body;
 
-  printf(SIDE "RECV\n");
+#if !NO_DOWNLOAD
+  dsb();
+  if (aux_uart->stat & (1 << 4)) {
+    printf(BOOT "\x1b[31mreceiver overrun\x1b[0m\n");
+    (void)aux_uart->lsr;
+  }
+  dsb();
+#endif
+
 
 wait_for_soh:
   while (1) {
@@ -221,7 +230,15 @@ fsm_recv_ack(uint16_t iden)
   } ack;
   uint8_t c, *body;
 
-  printf(SIDE "RECV_ACK\n");
+#if !NO_DOWNLOAD
+  dsb();
+  if (aux_uart->stat & (1 << 4)) {
+    printf(BOOT "\x1b[31mreceiver overrun\x1b[0m\n");
+    (void)aux_uart->lsr;
+    aux_uart->iir |= 2;
+  }
+  dsb();
+#endif
 
 wait_for_ack:
   while (1) {
@@ -323,7 +340,7 @@ fsm_send_ack(uint16_t iden)
 void
 fsm_download(config_t* config)
 {
-  uint32_t chunk_count, chunk_num, i;
+  uint32_t chunk_count, chunk_num;
   meta_t meta;
   chunkreq_t chunk_req;
   boot_t boot;
@@ -340,9 +357,6 @@ reset:
   fsm.timers[TIMER_RESEND].active = false;
 
   // printf(BOOT "FSM DOWNLOAD INIT\n");
-  // for(i = 0;i < NUM_TIMERS;i++) {
-  //   printf(BOOT "%s period: %lluμs\n", TIMER_NAMES[i], fsm.timers[i].period);
-  // }
 
   while (1) {
     if (FSM_OK == fsm_recv(&framebuf)) {
@@ -369,11 +383,11 @@ reset:
 
   // Acknowledge the HOST_POLL
   fsm_send_ack(0);
-  fsm_send_ack(0);
-  fsm_send_ack(0);
+  // fsm_send_ack(0);
+  // fsm_send_ack(0);
 
   // Get all the chunks
-  chunk_count = (meta.wire_size + 0xffff) / 0x1'0000;
+  chunk_count = (meta.wire_size + 0xfffe) / 0xffff;
   chunk_num = 0;
   while (chunk_num < chunk_count) {
     chunk_req = (chunkreq_t){ .num = chunk_num };
@@ -381,17 +395,17 @@ reset:
       fsm_send(DEV_RQCH, (void*)&chunk_req, sizeof chunk_req);
       fsm_timer_clear(TIMER_RESEND, platform_time());
 
-      uint64_t t0 = platform_time();
+      // uint64_t t0 = platform_time();
       r = fsm_recv(&framebuf);
-      uint64_t t1 = platform_time();
+      // uint64_t t1 = platform_time();
       // printf(BOOT "wait for CHNK for %lluμs, %s\n", t1-t0, FSM_STATUS_NAMES[r]);
-      // printf(BOOT "received frame, TYPE=%c%c%c%c IDEN=%hu PLEN=%hu\n",
-      //        framebuf.type[0],
-      //        framebuf.type[1],
-      //        framebuf.type[2],
-      //        framebuf.type[3],
-      //        framebuf.iden,
-      //        framebuf.plen);
+      printf(BOOT "received frame, TYPE=%c%c%c%c IDEN=%hu PLEN=%hu\n",
+             framebuf.type[0],
+             framebuf.type[1],
+             framebuf.type[2],
+             framebuf.type[3],
+             framebuf.iden,
+             framebuf.plen);
       if (r == FSM_RESET)
         goto reset;
       if (r == FSM_RESEND)
@@ -470,14 +484,18 @@ fsm_upload(config_t* config,
   uint8_t* marshal_data;
   uint16_t retries, marshal_len;
   uint32_t last_chunk_no;
+  size_t i;
 
   fsm.timers[TIMER_RESET].period = config_reset_timeout_us(config);
   fsm.timers[TIMER_RESEND].period = config_resend_timeout_us(config);
   fsm.timers[TIMER_SYMBOL].period = config_symbol_timeout_us(config);
-  printf(HOST "resend timeout: %lluμs\n", fsm.timers[TIMER_RESEND].period);
   fsm.timers[TIMER_SYMBOL].active = true;
-  retries = retries_ + 1;
 
+  for(i = 0;i < NUM_TIMERS;i++) {
+    printf(HOST FUNC("config") "%s period: %lluμs\n", TIMER_NAMES[i], fsm.timers[i].period);
+  }
+
+  retries = retries_ + 1;
   passthru = hooks.on_passthru;
 
 reset:
@@ -511,30 +529,28 @@ reset:
 
 
   while (1) {
-    // platform_clear_input_buffer();
     r = fsm_recv(&framebuf);
     if (r == FSM_RESET) {
       goto reset;
     }
 
-    printf(HOST "received: %c%c%c%c\n",
-           framebuf.type[0],
-           framebuf.type[1],
-           framebuf.type[2],
-           framebuf.type[3]);
+    // printf(HOST "received: %.4s\n", framebuf.type);
 
     if (!memcmp(DEV_BEAT, framebuf.type, 4) && framebuf.plen == 0)
       break;
-    if (!memcmp(DEV_RQCH, framebuf.type, 4) && framebuf.plen == sizeof chunk_req) {
+    if (!memcmp(DEV_RQCH, framebuf.type, 4) && framebuf.plen == sizeof
+                                               chunk_req) {
       memcpy(&chunk_req, framebuf.body, sizeof chunk_req);
-      printf(HOST "received chunk request (%" PRIi32 ")\n", chunk_req.num);
 
       if (!platform_marshal(chunk_req.num, &marshal_data, &marshal_len))
         continue;
 
-      printf(HOST "sending chunk (%huB)\n", marshal_len);
+      printf(HOST "received chunk request (%" PRIi32 "), sending (%huB)\n", chunk_req.num, marshal_len);
 
+      uint16_t save_iden = fsm.iden;
+      fsm.iden = framebuf.iden;
       fsm_send(HOST_CHNK, marshal_data, marshal_len);
+      fsm.iden = save_iden;
       hooks.on_sent_chunk(chunk_req.num);
 
       if (last_chunk_no != chunk_req.num)

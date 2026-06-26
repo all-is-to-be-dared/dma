@@ -28,3 +28,4 @@ typedef struct {
 } opts_t;
 
 extern opts_t opts;
+

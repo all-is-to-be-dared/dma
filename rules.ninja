@@ -37,7 +37,7 @@ rule pi-install
 
 
 host_cc = clang-22
-host_cflags = -std=c2y -O2 -I.
+host_cflags = -std=c2y -O2 -I. -march=native
 host_ldflags =
 
 rule host_cc

@@ -57,9 +57,11 @@ bool aux_uart_can_put(void) {
 }
 
 void aux_uart_put(uint8_t b) {
+  dsb();
   while (!aux_uart_can_put())
     ;
   aux_uart->io = (uint32_t)b;
+  dsb();
 }
 
 void _putchar(char character) {
@@ -73,7 +75,10 @@ bool aux_uart_can_read(void) {
 }
 
 uint8_t aux_uart_read(void) {
+  dsb();
   while(!aux_uart_can_read())
     ;
-  return (uint8_t)(aux_uart->io);
+  uint8_t c = (uint8_t)(aux_uart->io);
+  dsb();
+  return c;
 }

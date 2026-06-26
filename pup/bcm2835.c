@@ -1,7 +1,7 @@
 #include <string.h>
+#include <inttypes.h>
 
 #include "printf/printf.h"
-
 #include "bcm2835/platform.h"
 #include "pup/common.h"
 #include "pup/config.h"
@@ -64,8 +64,6 @@ extern uint8_t __prog_end[];
     _a > _b ? _a : _b;      \
   })
 
-#include <inttypes.h>
-
 bool
 platform_init_meta(meta_t* meta)
 {
@@ -74,10 +72,10 @@ platform_init_meta(meta_t* meta)
   uintptr_t stub_start, stub_end;
   size_t reloc_size, stub_size;
 
-  // printf(BOOT FUNC("platform_init_meta") "meta { .load_addr=%llx\n", meta->load_addr);
-  // printf(BOOT FUNC("platform_init_meta") "       .wire_size=%" PRIx32 "\n", meta->wire_size);
-  // printf(BOOT FUNC("platform_init_meta") "       .mem_size=%" PRIx32 "\n", meta->mem_size);
-  // printf(BOOT FUNC("platform_init_meta") "       .mem_crc32=%" PRIx32 " }\n", meta->mem_crc32);
+  printf(BOOT FUNC("platform_init_meta") "meta { .load_addr=%llx\n", meta->load_addr);
+  printf(BOOT FUNC("platform_init_meta") "       .wire_size=%" PRIx32 "\n", meta->wire_size);
+  printf(BOOT FUNC("platform_init_meta") "       .mem_size=%" PRIx32 "\n", meta->mem_size);
+  printf(BOOT FUNC("platform_init_meta") "       .mem_crc32=%" PRIx32 " }\n", meta->mem_crc32);
 
   if (meta->load_addr >= DRAM_LIMIT) {
     printf(BOOT FUNC("platform_init_meta") ERROR "load address outside of address space\n");
@@ -94,10 +92,10 @@ platform_init_meta(meta_t* meta)
   prog_start = (uintptr_t)__prog_start;
   prog_end = (uintptr_t)__prog_end;
 
-  // printf(
-  //   BOOT FUNC("platform_init_meta") "image = [%" PRIxPTR ",%" PRIxPTR ")\n", img_start, img_end);
-  // printf(
-  //   BOOT FUNC("platform_init_meta") "prog  = [%" PRIxPTR ",%" PRIxPTR ")\n", prog_start, prog_end);
+  printf(
+    BOOT FUNC("platform_init_meta") "image = [%" PRIxPTR ",%" PRIxPTR ")\n", img_start, img_end);
+  printf(
+    BOOT FUNC("platform_init_meta") "prog  = [%" PRIxPTR ",%" PRIxPTR ")\n", prog_start, prog_end);
 
   reloc_size = 0;
 
@@ -176,8 +174,7 @@ platform_feed(size_t chunk_no, uint8_t* data, size_t len)
     if (feed < reloc.tgt_start && (feed + len) > reloc.tgt_start) {
       cnt = reloc.tgt_start - feed;
       memcpy(feed, data, cnt);
-      printf(BOOT FUNC("platform_feed") ""
-                                        "direct copy to [%p,%p)\n",
+      printf(BOOT FUNC("platform_feed") "direct copy to [%p,%p)\n",
              feed,
              feed + cnt);
       len -= cnt;
@@ -188,8 +185,7 @@ platform_feed(size_t chunk_no, uint8_t* data, size_t len)
       off = feed - reloc.tgt_start;
       cnt = min(reloc.tgt_end - feed, len);
       memcpy(reloc.buf_start + off, data, cnt);
-      printf(BOOT FUNC("platform_feed") ""
-                                        "buffer copy to [+%zx,+%zx)\n",
+      printf(BOOT FUNC("platform_feed") "buffer copy to [+%zx,+%zx)\n",
              off,
              off + cnt);
       len -= cnt;
