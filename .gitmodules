@@ -1,3 +1,6 @@
 [submodule "newlib-cygwin"]
 	path = newlib-cygwin
 	url = https://sourceware.org/git/newlib-cygwin.git
+[submodule "printf"]
+	path = printf
+	url = https://github.com/mpaland/printf.git
