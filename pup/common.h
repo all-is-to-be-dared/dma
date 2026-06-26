@@ -9,6 +9,12 @@
 #define ERROR "\x1b[31mERROR\x1b[0m: "
 
 // payload: meta_t
+enum compress_type : uint32_t {
+  COMPRESS_NONE,
+  COMPRESS_XZ,
+  NUM_COMPRESS_TYPES,
+};
+static_assert(sizeof(enum compress_type) == 4);
 typedef struct
 {
   uint64_t load_addr;
@@ -17,6 +23,7 @@ typedef struct
   // number of bytes that the final image occupies in memory
   uint32_t mem_size;
   uint32_t mem_crc32;
+  enum compress_type compress;
 } meta_t;
 #define HOST_POLL "POLL"
 #define HOST_CHNK "CHNK"
@@ -76,7 +83,7 @@ platform_time(void);
 bool
 platform_init_meta(meta_t* meta);
 
-void
+bool
 platform_feed(size_t chunk_no, uint8_t* data, size_t len);
 
 bool
@@ -242,3 +249,12 @@ fsm_upload(config_t* config,
 
 void
 fsm_heartbeat();
+
+
+
+
+void*
+xz_malloc_stub(size_t size);
+
+void
+xz_free_stub(void *p);

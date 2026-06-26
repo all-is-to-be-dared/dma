@@ -57,7 +57,7 @@ rule host_cc
   description = ${_magenta}[HOSTCC]${_reset} ${out}
 
 rule host_link
-  command = ${host_cc} ${host_ldflags} ${ldflags_ext} ${in} -o ${out}
+  command = ${host_cc} ${host_ldflags} ${ldflags_ext} ${in} ${libs} -o ${out}
   description = ${_magenta}[HOSTLD]${_reset} ${out}
 
 

@@ -1,0 +1,16 @@
+d = libc/
+newlib_cflags = -Inewlib-cygwin/newlib/libc/string/
+
+build bcm2835/libnewlib.a: arm_mklib $d/memcmp.o $d/memchr.o $d/memmove.o $d/memset.o
+build $d/memcmp.o: arm_cc $d/memcmp.c
+  cflags_ext = $newlib_cflags
+build $d/memchr.o: arm_cc $d/memchr.c
+  cflags_ext = $newlib_cflags
+build $d/memmove.o: arm_cc $d/memmove.c
+  cflags_ext = $newlib_cflags
+build $d/memset.o: arm_cc $d/memset.c
+  cflags_ext = $newlib_cflags
+
+default bcm2835/libnewlib.a
+
+include libc/newlib-arm/build.ninja

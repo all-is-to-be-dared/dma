@@ -1,0 +1,4 @@
+# -------------------------------------------------------------------------------------------------
+# # xzutils installation
+host_xz_incl = -I/opt/homebrew/opt/xz/include/
+host_xz_lib  = -L/opt/homebrew/opt/xz/lib/

@@ -399,11 +399,8 @@ reset:
       r = fsm_recv(&framebuf);
       // uint64_t t1 = platform_time();
       // printf(BOOT "wait for CHNK for %lluμs, %s\n", t1-t0, FSM_STATUS_NAMES[r]);
-      printf(BOOT "received frame, TYPE=%c%c%c%c IDEN=%hu PLEN=%hu\n",
-             framebuf.type[0],
-             framebuf.type[1],
-             framebuf.type[2],
-             framebuf.type[3],
+      printf(BOOT "received frame, TYPE=%.4s IDEN=%hu PLEN=%hu\n",
+             framebuf.type,
              framebuf.iden,
              framebuf.plen);
       if (r == FSM_RESET)
@@ -418,7 +415,9 @@ reset:
     fsm.timers[TIMER_RESET].active = false;
     fsm.iden += 1;
 
-    platform_feed(chunk_num, framebuf.body, framebuf.plen);
+    if(!platform_feed(chunk_num, framebuf.body, framebuf.plen)) {
+      goto reset;
+    }
     chunk_num += 1;
   }
 
@@ -431,13 +430,14 @@ reset:
     fsm_timer_clear(TIMER_RESEND, platform_time());
 
     r = fsm_recv_ack(fsm.iden);
-    printf(BOOT "received ACK for BOOT\n");
     if (r == FSM_RESET)
       goto reset;
     if (r == FSM_RESEND)
       continue;
-    if (r == FSM_OK)
+    if (r == FSM_OK) {
+      printf(BOOT "received ACK for BOOT\n");
       break;
+    }
   }
 
   return;
@@ -538,6 +538,8 @@ reset:
 
     if (!memcmp(DEV_BEAT, framebuf.type, 4) && framebuf.plen == 0)
       break;
+    if (!memcmp(DEV_BOOT, framebuf.type, 4) && framebuf.plen == sizeof boot)
+      goto received_boot;
     if (!memcmp(DEV_RQCH, framebuf.type, 4) && framebuf.plen == sizeof
                                                chunk_req) {
       memcpy(&chunk_req, framebuf.body, sizeof chunk_req);
@@ -566,8 +568,12 @@ reset:
 
   while (1) {
     r = fsm_recv(&framebuf);
-    if (r == FSM_RESET)
+    if (r == FSM_RESET) {
+      printf(HOST "timed out waiting for BEAT/BOOT\n");
       goto reset;
+    }
+
+    printf(HOST "received: %.4s\n", framebuf.type);
 
     if (!memcmp(DEV_BEAT, framebuf.type, 4) && framebuf.plen == 0) {
       hooks.on_heartbeat();
@@ -575,11 +581,15 @@ reset:
     }
 
     if (!memcmp(DEV_BOOT, framebuf.type, 4) && framebuf.plen == sizeof boot) {
-      fsm_send_ack(framebuf.iden);
-      memcpy(&boot, framebuf.body, sizeof boot);
-      return boot.is_ok ? UPLOAD_OK : UPLOAD_FAILED;
+      goto received_boot;
     }
   }
+
+received_boot:
+  printf(HOST "received BOOT frame, ok=%d\n", boot.is_ok);
+  fsm_send_ack(framebuf.iden);
+  memcpy(&boot, framebuf.body, sizeof boot);
+  return boot.is_ok ? UPLOAD_OK : UPLOAD_FAILED;
 }
 
 

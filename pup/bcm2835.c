@@ -2,6 +2,11 @@
 #include <inttypes.h>
 
 #include "printf/printf.h"
+
+#include "pup/xz-embedded/xz.h"
+#include "pup/xz_config.h"
+
+#include "generic/math.h"
 #include "bcm2835/platform.h"
 #include "pup/common.h"
 #include "pup/config.h"
@@ -31,9 +36,38 @@ platform_time(void)
   return systmr_read_raw();
 }
 
+static uint8_t _Alignas(8) xz_arena[2 << 20];
+static uint8_t* xz_arena_ptr;
+
+void*
+xz_malloc_stub(size_t size)
+{
+  uint8_t *next, *xz_arena_end, *ret;
+
+  xz_arena_end = xz_arena + sizeof xz_arena;
+  if (size >= sizeof xz_arena || xz_arena_ptr >= xz_arena_end - size) {
+    printf(BOOT FUNC("xz_malloc_stub") ERROR "ENOMEM");
+    return NULL;
+  }
+  ret = xz_arena_ptr;
+  next = (uint8_t*)(((uintptr_t)xz_arena_ptr + size + 7) & -8);
+  xz_arena_ptr = next;
+  printf(BOOT FUNC("xz_malloc_stub") "(%zu) -> %p\n", size, ret);
+  return ret;
+}
+
+void
+xz_free_stub(void* p)
+{
+  printf(BOOT FUNC("xz_free_stub") ERROR "(%p) called\n", p);
+  return;
+}
+struct xz_dec* XZ;
+
 enum
 {
   DRAM_LIMIT = 0x2000'0000U,
+  XZ_DICT_MAX = 1 << 20,
 };
 
 static meta_t META;
@@ -47,22 +81,15 @@ struct reloc
 static struct reloc reloc;
 
 static uint8_t* feed;
+static size_t decompress_idx;
 
 extern uint8_t __prog_start[];
 extern uint8_t __prog_end[];
 
-#define min(a, b)           \
-  ({                        \
-    __typeof__(a) _a = (a); \
-    __typeof__(b) _b = (b); \
-    _a > _b ? _b : _a;      \
-  })
-#define max(a, b)           \
-  ({                        \
-    __typeof__(a) _a = (a); \
-    __typeof__(b) _b = (b); \
-    _a > _b ? _a : _b;      \
-  })
+static const char* COMPRESS_NAMES[] = {
+  [COMPRESS_NONE] = "NONE",
+  [COMPRESS_XZ] = "XZ",
+};
 
 bool
 platform_init_meta(meta_t* meta)
@@ -75,7 +102,10 @@ platform_init_meta(meta_t* meta)
   printf(BOOT FUNC("platform_init_meta") "meta { .load_addr=%llx\n", meta->load_addr);
   printf(BOOT FUNC("platform_init_meta") "       .wire_size=%" PRIx32 "\n", meta->wire_size);
   printf(BOOT FUNC("platform_init_meta") "       .mem_size=%" PRIx32 "\n", meta->mem_size);
-  printf(BOOT FUNC("platform_init_meta") "       .mem_crc32=%" PRIx32 " }\n", meta->mem_crc32);
+  printf(BOOT FUNC("platform_init_meta") "       .mem_crc32=%" PRIx32 "\n", meta->mem_crc32);
+  if (meta->compress >= NUM_COMPRESS_TYPES)
+    return false;
+  printf(BOOT FUNC("platform_init_meta") "       .compress=%s }\n", COMPRESS_NAMES[meta->compress]);
 
   if (meta->load_addr >= DRAM_LIMIT) {
     printf(BOOT FUNC("platform_init_meta") ERROR "load address outside of address space\n");
@@ -158,39 +188,43 @@ platform_init_meta(meta_t* meta)
     };
   }
 
+  xz_arena_ptr = xz_arena;
+  XZ = xz_dec_init(XZ_PREALLOC, XZ_DICT_MAX);
+  if (!XZ) {
+    printf(BOOT FUNC("platform_init_meta") ERROR "xz_dec_init failed\n");
+    return false;
+  }
+
   feed = (uint8_t*)(uintptr_t)META.load_addr;
+  decompress_idx = 0;
 
   return true;
 }
 
-void
-platform_feed(size_t chunk_no, uint8_t* data, size_t len)
+static void
+feed_impl(uint8_t* data, size_t len)
 {
   size_t cnt, off;
-
-  printf(BOOT "received chunk #%zu (%zuB)\n", chunk_no, len);
 
   if (reloc.size) {
     if (feed < reloc.tgt_start && (feed + len) > reloc.tgt_start) {
       cnt = reloc.tgt_start - feed;
       memcpy(feed, data, cnt);
-      printf(BOOT FUNC("platform_feed") "direct copy to [%p,%p)\n",
-             feed,
-             feed + cnt);
+      printf(BOOT FUNC("platform_feed") "direct copy to [%p,%p)\n", feed, feed + cnt);
       len -= cnt;
       data += cnt;
       feed += cnt;
+      decompress_idx += cnt;
     }
     if (feed >= reloc.tgt_start && feed < reloc.tgt_end) {
       off = feed - reloc.tgt_start;
       cnt = min(reloc.tgt_end - feed, len);
       memcpy(reloc.buf_start + off, data, cnt);
-      printf(BOOT FUNC("platform_feed") "buffer copy to [+%zx,+%zx)\n",
-             off,
-             off + cnt);
+      printf(BOOT FUNC("platform_feed") "buffer copy to [+%zx,+%zx)\n", off, off + cnt);
       len -= cnt;
       data += cnt;
       feed += cnt;
+      decompress_idx += cnt;
     }
   }
 
@@ -198,7 +232,76 @@ platform_feed(size_t chunk_no, uint8_t* data, size_t len)
     memcpy(feed, data, len);
     printf(BOOT FUNC("platform_feed") "direct copy to [%p,%p)\n", feed, feed + len);
     feed += len;
+    decompress_idx += len;
   }
+}
+
+static uint8_t decompress_buffer[128 << 10];
+
+bool
+platform_feed(size_t chunk_no, uint8_t* data, size_t len)
+{
+  struct xz_buf xzbuf;
+  enum xz_ret r;
+  size_t prev_in_pos;
+
+  printf(BOOT "received chunk #%zu (%zuB)\n", chunk_no, len);
+
+  if (META.compress == COMPRESS_XZ) {
+    xzbuf = (struct xz_buf){
+      .in = data,
+      .in_pos = 0,
+      .in_size = len,
+      .out = decompress_buffer,
+      .out_pos = 0,
+      .out_size = sizeof decompress_buffer,
+    };
+    while (xzbuf.in_pos < xzbuf.in_size) {
+      xzbuf.out_pos = 0;
+      prev_in_pos = xzbuf.in_pos;
+      r = xz_dec_run(XZ, &xzbuf);
+      switch (r) {
+        case XZ_OK:
+        case XZ_STREAM_END:
+          printf(BOOT FUNC("platform_feed") "inflated %d->%d bytes\n",
+                 xzbuf.in_pos - prev_in_pos,
+                 xzbuf.out_pos);
+          printf(BOOT FUNC("platform_feed") "decompressed byte at %x is %hhx\n",
+                 decompress_idx,
+                 decompress_buffer[0]);
+          feed_impl(decompress_buffer, xzbuf.out_pos);
+          break;
+        case XZ_UNSUPPORTED_CHECK:
+          printf(BOOT FUNC("platform_feed") ERROR "XZ_UNSUPPORTED_CHECK\n");
+          continue;
+        case XZ_MEM_ERROR:
+          printf(BOOT FUNC("platform_feed") ERROR "XZ_MEM_ERROR\n");
+          return false;
+        case XZ_MEMLIMIT_ERROR:
+          printf(BOOT FUNC("platform_feed") ERROR "XZ_MEMLIMIT_ERROR\n");
+          return false;
+        case XZ_FORMAT_ERROR:
+          printf(BOOT FUNC("platform_feed") ERROR "XZ_FORMAT_ERROR\n");
+          return false;
+        case XZ_OPTIONS_ERROR:
+          printf(BOOT FUNC("platform_feed") ERROR "XZ_OPTIONS_ERROR\n");
+          return false;
+        case XZ_DATA_ERROR:
+          printf(BOOT FUNC("platform_feed") ERROR "XZ_DATA_ERROR\n");
+          return false;
+        case XZ_BUF_ERROR:
+          printf(BOOT FUNC("platform_feed") ERROR "XZ_BUF_ERROR\n");
+          return false;
+        default:
+          printf(BOOT FUNC("platform_feed") ERROR "xz_dec_run failed with unknown code %d\n", r);
+          return false;
+      }
+    }
+  } else {
+    feed_impl(data, len);
+  }
+
+  return true;
 }
 
 enum
@@ -220,13 +323,11 @@ crc_with_heartbeat(uint32_t crc, uint8_t* data, uint8_t* until)
 }
 
 bool
-platform_load_image()
+platform_load_image(void)
 {
   uint32_t crc;
   size_t cnt, off;
   bool crc_ok;
-
-  printf(BOOT "platform_load_image()\n");
 
   crc = CRC_INIT;
 
@@ -239,38 +340,53 @@ platform_load_image()
     return false;
   }
 
-  feed = (uint8_t*)(uintptr_t)META.load_addr;
+  switch (META.compress) {
+    case COMPRESS_NONE:
+      feed = (uint8_t*)(uintptr_t)META.load_addr;
 
-  if (reloc.size) {
-    if (feed < reloc.tgt_start && end > reloc.tgt_start) {
-      cnt = reloc.tgt_start - feed;
-      printf(BOOT FUNC("platform_load_image") ""
-                                              "CRC [%p,%p)\n",
-             feed,
-             feed + cnt);
-      crc = crc_with_heartbeat(crc, feed, feed + cnt);
-      feed += cnt;
-    }
-    if (feed >= reloc.tgt_start && feed < reloc.tgt_end) {
-      off = feed - reloc.tgt_start;
-      cnt = min(reloc.tgt_end - feed, end - feed);
-      printf(BOOT FUNC("platform_load_image") "CRC indirect [+%zx,+%zx)\n", off, off + cnt);
-      crc = crc_with_heartbeat(crc, reloc.buf_start + off, reloc.buf_start + off + cnt);
-      feed += cnt;
-    }
-  }
-  if (feed < end) {
-    printf(BOOT FUNC("platform_load_image") "CRC [%p,%p)\n", feed, end);
-    crc = crc_with_heartbeat(crc, feed, end);
+      if (reloc.size) {
+        if (feed < reloc.tgt_start && end > reloc.tgt_start) {
+          cnt = reloc.tgt_start - feed;
+          printf(BOOT FUNC("platform_load_image") ""
+                                                  "CRC [%p,%p)\n",
+                 feed,
+                 feed + cnt);
+          crc = crc_with_heartbeat(crc, feed, feed + cnt);
+          feed += cnt;
+        }
+        if (feed >= reloc.tgt_start && feed < reloc.tgt_end) {
+          off = feed - reloc.tgt_start;
+          cnt = min(reloc.tgt_end - feed, end - feed);
+          printf(BOOT FUNC("platform_load_image") "CRC indirect [+%zx,+%zx)\n", off, off + cnt);
+          crc = crc_with_heartbeat(crc, reloc.buf_start + off, reloc.buf_start + off + cnt);
+          feed += cnt;
+        }
+      }
+      if (feed < end) {
+        printf(BOOT FUNC("platform_load_image") "CRC [%p,%p)\n", feed, end);
+        crc = crc_with_heartbeat(crc, feed, end);
+      }
+
+      crc_ok = crc == META.mem_crc32;
+
+      if (!crc_ok) {
+        printf(BOOT FUNC("platform_load_image") ERROR "CRC: expected %" PRIx32 " got %" PRIx32 "\n",
+               META.mem_crc32,
+               crc);
+      }
+      break;
+    case COMPRESS_XZ:
+      // CRC was already checked by xz-embedded
+      crc_ok = true;
+      break;
+    default:
+      printf(BOOT FUNC("platform_load_image") ERROR "Unknown compression option %lu\n",
+             META.compress);
+      return false;
   }
 
-  crc_ok = crc == META.mem_crc32;
-
-  if (!crc_ok) {
-    printf(BOOT FUNC("platform_load_image") ERROR "CRC: expected %" PRIx32 " got %" PRIx32 "\n",
-           META.mem_crc32,
-           crc);
-  }
+  if(crc_ok)
+    printf(BOOT FUNC("platform_load_image") "okay to boot\n");
 
   return crc_ok;
 }
@@ -307,14 +423,16 @@ void
 main(void)
 {
   uint32_t r;
-  __asm__ volatile ("mrc p15, 0, %0, c1, c0, 0" : "=r" (r));
+  __asm__ volatile("mrc p15, 0, %0, c1, c0, 0" : "=r"(r));
   r |= (1 << 11) | (1 << 12);
-  __asm__ volatile ("mcr p15, 0, %0, c1, c0, 0" : : "r" (r));
-  
+  __asm__ volatile("mcr p15, 0, %0, c1, c0, 0" : : "r"(r));
+
   gpio_pin_set_function(14, FSEL_ALT5);
   gpio_pin_set_function(15, FSEL_ALT5);
 
   aux_uart_init(BAUD_RATE, 250'000'000);
+
+  xz_crc32_init();
 
   fsm_download(&config);
 

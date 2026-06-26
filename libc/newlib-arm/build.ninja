@@ -1,4 +1,4 @@
-d = bcm2835/libc/newlib
+d = libc/newlib-arm
 newlib_incl = -Inewlib-cygwin/include -Inewlib-cygwin/newlib/libc/string
 
 build $d/strcmp.o: arm_cc $d/strcmp.S

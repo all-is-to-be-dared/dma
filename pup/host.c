@@ -9,6 +9,7 @@
 #include <sys/stat.h>
 #include <inttypes.h>
 #include <ctype.h>
+#include <lzma.h>
 
 #include "pup/host.h"
 #include "pup/common.h"
@@ -85,10 +86,10 @@ parse_opts(int argc, char** argv)
     }
     if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help"))
       opts._print_usage = true;
-    else if(!strcmp(argv[i], "-H") || !strcmp(argv[i], "--headless"))
+    else if (!strcmp(argv[i], "-H") || !strcmp(argv[i], "--headless"))
       opts.headless = true;
-    else if(!strcmp(argv[i], "-p") || !strcmp(argv[i], "--pty"))
-      opts.is_pty= true;
+    else if (!strcmp(argv[i], "-p") || !strcmp(argv[i], "--pty"))
+      opts.is_pty = true;
     else if (!strcmp(argv[i], "-a") || !strcmp(argv[i], "--addr"))
       curr = OPT_LOAD;
     else if (!strcmp(argv[i], "-d") || !strcmp(argv[i], "--dev"))
@@ -155,7 +156,7 @@ static void
 hook_passthru(uint8_t c)
 {
   // printf("passthru: '%c' (<%d>)\n", c, c);
-  if(isprint(c) || c == 0x1b || isspace(c) || c > 0x80)
+  if (isprint(c) || c == 0x1b || isspace(c) || c > 0x80)
     putchar(c);
   else
     printf("<%x>", c);
@@ -176,13 +177,13 @@ input_crc(void)
   uint32_t crc;
 
   crc = CRC_INIT;
-  while((r = read(opts.inp_fd, staging, sizeof staging)) != -1) {
-    if(!r)
+  while ((r = read(opts.inp_fd, staging, sizeof staging)) != -1) {
+    if (!r)
       break;
     crc = crc32(crc, staging, r);
   }
 
-  if(r == -1) {
+  if (r == -1) {
     fprintf(stderr,
             "%s: failed to read from %s: %s (%d)\n",
             opts.self,
@@ -201,7 +202,7 @@ input_crc(void)
 bool
 platform_marshal(size_t chunk_no, uint8_t** data, uint16_t* len)
 {
-  int r;
+  ssize_t r;
 
   r = pread(opts.inp_fd, staging, sizeof staging, chunk_no * sizeof staging);
 
@@ -229,12 +230,158 @@ platform_marshal(size_t chunk_no, uint8_t** data, uint16_t* len)
 
 
 
+static size_t
+host_pread(int fd, void* buf, size_t len, off_t off)
+{
+  ssize_t r;
+
+  r = pread(opts.inp_fd, buf, 6, 0);
+  if (r == -1) {
+    fprintf(stderr,
+            "%s: failed to read from %s: %s (%d)\n",
+            opts.self,
+            opts.inp_path,
+            strerror(errno),
+            errno);
+    exit(1);
+  }
+
+  return r;
+}
+
+
+
+
+static bool
+is_xz_file(void)
+{
+  size_t r;
+  char magic[6];
+
+  const uint8_t XZ_SIG[6] = { 0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00 };
+
+  r = host_pread(opts.inp_fd, magic, 6, 0);
+  if (r < 6) {
+    return false;
+  } else {
+    return !memcmp(XZ_SIG, magic, 6);
+  }
+}
+
+
+
+
+static size_t
+xz_uncompressed_size(int fd, size_t len)
+{
+  // Based on https://github.com/tukaani-project/xz/blob/master/doc/examples/11_file_info.c
+
+  lzma_index* index;
+  lzma_stream strm;
+  lzma_ret r;
+  ssize_t s;
+
+  strm = (lzma_stream)LZMA_STREAM_INIT;
+  r = lzma_file_info_decoder(&strm, &index, UINT64_MAX, len);
+  switch (r) {
+    case LZMA_OK:
+      break;
+    case LZMA_MEM_ERROR:
+      fprintf(stderr,
+              "%s: xz_uncompressed_size: LZMA_MEM_ERROR when initializing file info decoder\n",
+              opts.self);
+      exit(1);
+    case LZMA_PROG_ERROR:
+    default:
+      fprintf(stderr,
+              "%s: xz_uncompressed_size: lzma_file_info_decoder: unknown error (%d)\n",
+              opts.self,
+              r);
+      exit(1);
+  }
+
+  strm.avail_in = 0;
+  uint8_t inbuf[BUFSIZ];
+
+  if (lseek(fd, 0, SEEK_SET) == -1) {
+    fprintf(stderr,
+            "%s: failed to rewind %s: %s (%d)\n",
+            opts.self,
+            opts.inp_path,
+            strerror(errno),
+            errno);
+    exit(1);
+  }
+
+  while (1) {
+    if (!strm.avail_in) {
+      strm.next_in = inbuf;
+      s = read(fd, inbuf, sizeof inbuf);
+      if (s == -1) {
+        fprintf(stderr,
+                "%s: failed to read from %s: %s (%d)\n",
+                opts.self,
+                opts.inp_path,
+                strerror(errno),
+                errno);
+        exit(1);
+      }
+      strm.avail_in = s;
+    }
+
+    r = lzma_code(&strm, LZMA_RUN);
+
+    switch (r) {
+      case LZMA_OK:
+        break;
+      case LZMA_SEEK_NEEDED:
+        if (lseek(fd, strm.seek_pos, SEEK_SET) == -1) {
+          fprintf(stderr,
+                  "%s: failed to seek %s (%llu): %s (%d)\n",
+                  opts.self,
+                  opts.inp_path,
+                  strm.seek_pos,
+                  strerror(errno),
+                  errno);
+          exit(1);
+        }
+        strm.avail_in = 0;
+        break;
+      case LZMA_STREAM_END:
+        return lzma_index_uncompressed_size(index);
+      case LZMA_FORMAT_ERROR:
+        fprintf(stderr, "%s: %s is not in the .xz format\n", opts.self, opts.inp_path);
+        exit(1);
+      case LZMA_OPTIONS_ERROR:
+        fprintf(stderr,
+                "%s: %s has .xz headers that are not supported by this liblzma version\n",
+                opts.self,
+                opts.inp_path);
+        exit(1);
+      case LZMA_DATA_ERROR:
+        fprintf(stderr, "%s: %s is corrupt\n", opts.self, opts.inp_path);
+        exit(1);
+      case LZMA_MEM_ERROR:
+        fprintf(stderr, "%s: xz_uncompressed_size: lzma_code: LZMA_MEM_ERROR\n", opts.self);
+        exit(1);
+      default:
+        fprintf(
+          stderr, "%s: xz_uncompressed_size: lzma_code: unexpected error (%d)\n", opts.self, r);
+        exit(1);
+    }
+  }
+}
+
+
+
+
 int
 main(int argc, char** argv)
 {
-  size_t inp_size;
+  size_t inp_size, wire_size;
   uint32_t inp_crc;
   struct stat st;
+  enum compress_type compress;
 
   parse_opts(argc, argv);
   if (opts._print_usage) {
@@ -261,15 +408,26 @@ main(int argc, char** argv)
       stderr, "%s: failed to stat %s: %s (%d)\n", opts.self, opts.inp_path, strerror(errno), errno);
     return EXIT_FAILURE;
   }
-  inp_size = st.st_size;
+  wire_size = st.st_size;
 
   inp_crc = input_crc();
 
+  compress = COMPRESS_NONE;
+  if (is_xz_file()) {
+    printf(HOST "%s is XZ-compressed, switching compression modes\n", opts.inp_path);
+    compress = COMPRESS_XZ;
+    inp_size = xz_uncompressed_size(opts.inp_fd, wire_size);
+    printf(HOST "%s inflates to %zuB\n", opts.inp_path, inp_size);
+  } else {
+    inp_size = wire_size;
+  }
+
   meta_t meta = {
     .load_addr = opts.load_addr,
-    .wire_size = inp_size,
+    .wire_size = wire_size,
     .mem_size = inp_size,
     .mem_crc32 = inp_crc,
+    .compress = compress,
   };
   struct uploader_hooks hooks = {
     .on_heartbeat = hook_heartbeat,
@@ -279,12 +437,12 @@ main(int argc, char** argv)
   };
   fsm_upload(&config, &meta, NULL, 4, hooks);
 
-  if(!opts.headless) {
+  if (!opts.headless) {
     close(opts.dev_fd);
-    
+
     char baud_string[32];
-    snprintf(baud_string, sizeof baud_string, "%"PRIi32, BAUD_RATE);
-    execlp("picocom", "picocom", "--noreset", "-b", baud_string ,opts.dev_path, (char*)NULL);
+    snprintf(baud_string, sizeof baud_string, "%" PRIi32, BAUD_RATE);
+    execlp("picocom", "picocom", "--noreset", "-b", baud_string, opts.dev_path, (char*)NULL);
 
     fprintf(stderr, "%s: failed to start picocom: %s (%d)\n", opts.self, strerror(errno), errno);
     return EXIT_FAILURE;

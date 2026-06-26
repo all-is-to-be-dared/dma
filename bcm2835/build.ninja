@@ -12,11 +12,3 @@ build bcm2835/printf.o: arm_cc printf/printf.c
 build bcm2835/systmr.o: arm_cc bcm2835/systmr.c
 
 default bcm2835/libplatform.a
-
-
-
-
-# -------------------------------------------------------------------------------------------------
-# NEWLIB-BASED LIBC FUNCTIONS
-
-include bcm2835/libc/build.ninja

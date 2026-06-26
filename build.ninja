@@ -13,6 +13,12 @@ include rules.ninja
 
 
 
+# Next, pull in information for external (non-vendored) packages we depend on
+include extern.ninja
+
+
+
+
 # Then, we pull in all the subprojects. We use `include` instead of `subninja` so that
 # cross-project dependencies work properly.
 
@@ -25,6 +31,9 @@ include pup/build.ninja
 
 # stubs/ are minimal programs used as elementary tests for various other features.
 include stubs/build.ninja
+
+# libc/ contains libc-provided functionality that the embedded targets expect
+include libc/build.ninja
 
 
 

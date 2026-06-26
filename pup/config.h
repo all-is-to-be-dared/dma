@@ -4,7 +4,9 @@
 
 enum
 {
-  BAUD_RATE = 3125000,
+  // BAUD_RATE = 3125000,
+  // BAUD_RATE = 1562500
+  BAUD_RATE = 1152000
 };
 
 static config_t config = {
