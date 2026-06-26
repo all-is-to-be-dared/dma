@@ -4,3 +4,6 @@
 [submodule "printf"]
 	path = printf
 	url = https://github.com/mpaland/printf.git
+[submodule "xz-embedded"]
+	path = xz-embedded
+	url = https://github.com/tukaani-project/xz-embedded.git
