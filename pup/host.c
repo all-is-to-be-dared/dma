@@ -24,9 +24,10 @@ opts_t opts = {
   .inp_fd = -1,
   .dev_path = "<UNINIT>",
   .dev_fd = -1,
-  .load_addr = ~(uint64_t)0,
+  .load_addr = 0x8000,
   .is_pty = false,
   .headless = false,
+  .con_baud = 115200,
   ._print_usage = false,
 };
 
@@ -37,6 +38,7 @@ void
 parse_opts(int argc, char** argv)
 {
   int r;
+  uint64_t nv;
 
   opts.self = argv[0];
   enum
@@ -44,6 +46,7 @@ parse_opts(int argc, char** argv)
     OPT_NONE,
     OPT_DEV,
     OPT_LOAD,
+    OPT_CON_BAUD,
   } curr = OPT_NONE;
   if (argc == 1)
     opts._print_usage = true;
@@ -64,9 +67,10 @@ parse_opts(int argc, char** argv)
         curr = OPT_NONE;
         continue;
       case OPT_LOAD:
+      case OPT_CON_BAUD:
         errno = 0;
         char* end;
-        opts.load_addr = strtoull(argv[i], &end, 0);
+        nv = strtoull(argv[i], &end, 0);
         if (*end) {
           fprintf(stderr,
                   "%s: couldn't parse %s value: stopped parsing at %c\n",
@@ -78,6 +82,17 @@ parse_opts(int argc, char** argv)
           fprintf(
             stderr, "%s: couldn't parse %s value: %s\n", opts.self, argv[i - 1], strerror(errno));
           opts._print_usage = true;
+        } else {
+          if(curr == OPT_LOAD)
+            opts.load_addr = nv;
+          if(curr == OPT_CON_BAUD) {
+            if(nv > UINT32_MAX) {
+              fprintf(stderr, "%s: console baud rate too large (must be < 2^32)\n", opts.self);
+              opts._print_usage = true;
+            } else {
+              opts.con_baud = nv;
+            }
+          }
         }
         curr = OPT_NONE;
         continue;
@@ -90,6 +105,8 @@ parse_opts(int argc, char** argv)
       opts.headless = true;
     else if (!strcmp(argv[i], "-p") || !strcmp(argv[i], "--pty"))
       opts.is_pty = true;
+    else if (!strcmp(argv[i], "-B") || !strcmp(argv[i], "--console-baud"))
+      curr = OPT_CON_BAUD;
     else if (!strcmp(argv[i], "-a") || !strcmp(argv[i], "--addr"))
       curr = OPT_LOAD;
     else if (!strcmp(argv[i], "-d") || !strcmp(argv[i], "--dev"))
@@ -123,11 +140,52 @@ parse_opts(int argc, char** argv)
 
 
 
+struct opt {
+  const char *short_;
+  const char *long_;
+  const char *help;
+  const char *val;
+  bool (*parse)(const char *);
+};
+static const struct opt NULL_OPT = { NULL, NULL, NULL, 0, NULL };
+
+
+
+
+static const struct opt OPTS[] = {
+  { "-h", "--help", "Show this help", NULL, nullptr },
+  { "-d", "--dev", "Device to upload to", "<DEV>", nullptr },
+  { "-p", "--pty", "Device is a PTY", NULL, nullptr },
+  { "-H", "--headless", "Do not open post-upload console", NULL, nullptr },
+  { "-B", "--console-baud", "Initial baud rate for post-upload console (115200)", "<BAUD>", nullptr },
+  { "-a", "--addr", "Address at which to load binary (0x8000)", "<ADDR>", nullptr },
+  NULL_OPT,
+};
+
+
+
+
 void
 print_usage(void)
 {
+  const struct opt *curr;
+
+  printf("\x1b[1mP\x1b[0mrogram \x1b[1mUP\x1b[0mloader \"PUP\" v0.1.0\tMaximilien Cura\n");
   printf("\n");
-  printf("Usage: %s [-hHp] [-a <ADDR>] [-d <DEV>] <BINARY>\n", opts.self);
+  printf("Usage: pup [-hHp] [-B <CONBAUD>] [-a <ADDR>] [-d <DEV>] <BINARY>\n");
+  printf("\n");
+  printf("OPTIONS:\n");
+
+  for(curr = OPTS;memcmp(curr, &NULL_OPT, sizeof *curr);curr++) {
+    char buf[20];
+    snprintf(buf, sizeof buf, "%s, %s", curr->short_, curr->long_);
+    printf("\t%-20s\x1b[1m%-8s\x1b[0m%s\n", buf, curr->val ? curr->val : "", curr->help);
+  }
+  printf("\n");
+  printf("NOTE: DEVICE SPECIFIERS\n");
+  printf("\tDevices can be specified multiple ways:\n");
+  printf("\t  - direct path to callout device\n");
+  printf("\t  - TODO\n");
   printf("\n");
 }
 
@@ -441,8 +499,8 @@ main(int argc, char** argv)
     close(opts.dev_fd);
 
     char baud_string[32];
-    snprintf(baud_string, sizeof baud_string, "%" PRIi32, BAUD_RATE);
-    execlp("picocom", "picocom", "--noreset", "-b", baud_string, opts.dev_path, (char*)NULL);
+    snprintf(baud_string, sizeof baud_string, "%" PRIi32, opts.con_baud);
+    execlp("picocom", "picocom", "--noreset", "--imap=lfcrlf", "-b", baud_string, opts.dev_path, (char*)NULL);
 
     fprintf(stderr, "%s: failed to start picocom: %s (%d)\n", opts.self, strerror(errno), errno);
     return EXIT_FAILURE;

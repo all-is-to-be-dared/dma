@@ -23,6 +23,7 @@ typedef struct {
 
   bool is_pty;
   bool headless;
+  uint32_t con_baud;
 
   bool _print_usage;
 } opts_t;
