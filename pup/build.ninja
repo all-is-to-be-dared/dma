@@ -1,3 +1,6 @@
+# -------------------------------------------------------------------------------------------------
+# TARGET: pup/bcm2835.bin
+
 build pup/bcm2835.bin: arm_objcopy pup/bcm2835.elf
 build pup/bcm2835.elf: arm_link $
   pup/fsm.arm1176.o pup/crc.arm1176.o pup/fcs.arm1176.o $
@@ -17,9 +20,15 @@ build pup/fcs.arm1176.o: arm_cc pup/fcs.c
 default pup/bcm2835.bin
 
 
+
+
+# -------------------------------------------------------------------------------------------------
+# TARGET: bin/pup
+
 build bin/pup: host_link $
   pup/host.o pup/host_macos.o pup/host_linux.o $
-  pup/fsm.host.o pup/crc.host.o pup/fcs.host.o
+  pup/fsm.host.o pup/crc.host.o pup/fcs.host.o $
+  | bin/
 build pup/host.o: host_cc pup/host.c
 build pup/host_macos.o: host_cc pup/host_macos.c
 build pup/host_linux.o: host_cc pup/host_linux.c

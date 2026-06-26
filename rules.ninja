@@ -1,11 +1,18 @@
+# -------------------------------------------------------------------------------------------------
+# ANSI COLORS
+
 # Note: this is a raw escape character. Use `:show list` in Vim to see it.
 _ansi_esc = 
 _green = ${_ansi_esc}[32m
 _magenta = ${_ansi_esc}[35m
+_cyan = ${_ansi_esc}[36m
 _reset = ${_ansi_esc}[0m
 
 
 
+
+# -------------------------------------------------------------------------------------------------
+# ARMv6 COMPILER
 
 arm_cflags = -Wall -O2 -I. -ffreestanding -nostdlib -nostartfiles -std=gnu23 -march=armv6zk $
              -mcpu=arm1176jzf-s -fdiagnostics-color
@@ -36,6 +43,9 @@ rule pi-install
 
 
 
+# -------------------------------------------------------------------------------------------------
+# HOST COMPILER
+
 host_cc = clang-22
 host_cflags = -std=c2y -O2 -I. -march=native
 host_ldflags =
@@ -49,3 +59,13 @@ rule host_cc
 rule host_link
   command = ${host_cc} ${host_ldflags} ${ldflags_ext} ${in} -o ${out}
   description = ${_magenta}[HOSTLD]${_reset} ${out}
+
+
+
+
+# -------------------------------------------------------------------------------------------------
+# MISC. UTILITIES
+
+rule mkdir
+  command = mkdir -p ${out}
+  description = ${_cyan}[MKDIR]${_reset} ${out}

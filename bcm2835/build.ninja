@@ -1,3 +1,6 @@
+# -------------------------------------------------------------------------------------------------
+# TARGET: bcm2835/libplatform.a
+
 build bcm2835/libplatform.a: arm_mklib $
   bcm2835/init.o bcm2835/pwrman.o bcm2835/uart.o bcm2835/gpio.o bcm2835/printf.o bcm2835/systmr.o
 build bcm2835/init.o: arm_cc bcm2835/init.c
@@ -9,5 +12,11 @@ build bcm2835/printf.o: arm_cc printf/printf.c
 build bcm2835/systmr.o: arm_cc bcm2835/systmr.c
 
 default bcm2835/libplatform.a
+
+
+
+
+# -------------------------------------------------------------------------------------------------
+# NEWLIB-BASED LIBC FUNCTIONS
 
 include bcm2835/libc/build.ninja
