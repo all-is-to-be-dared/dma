@@ -3,16 +3,18 @@
 
 d = pup/xz-embedded/
 
-xz_cflags = -I$d -DXZ_DEC_PREALLOC=1
+xz_cflags = -I$d -DXZ_DEC_PREALLOC=1 -DXZ_DEC_BCJ=1
 
 build ${d}/libxz_embedded.bcm2835.a: arm_mklib ${d}/xz_crc32.bcm2835.o $
-  ${d}/xz_dec_stream.bcm2835.o ${d}/xz_dec_lzma2.bcm2835.o
+  ${d}/xz_dec_stream.bcm2835.o ${d}/xz_dec_lzma2.bcm2835.o ${d}/xz_dec_bcj.bcm2835.o
 
 build ${d}/xz_crc32.bcm2835.o: arm_cc ${d}/xz_crc32.c
-  cflags = ${xz_cflags}
+  cflags_ext = ${xz_cflags}
 build ${d}/xz_dec_stream.bcm2835.o: arm_cc ${d}/xz_dec_stream.c
-  cflags = ${xz_cflags}
+  cflags_ext = ${xz_cflags}
 build ${d}/xz_dec_lzma2.bcm2835.o: arm_cc ${d}/xz_dec_lzma2.c
-  cflags = ${xz_cflags}
+  cflags_ext = ${xz_cflags}
+build ${d}/xz_dec_bcj.bcm2835.o: arm_cc ${d}/xz_dec_bcj.c
+  cflags_ext = ${xz_cflags} -DXZ_DEC_ARM=1
 
 default ${d}/libxz_embedded.bcm2835.a
