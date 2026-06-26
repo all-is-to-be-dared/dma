@@ -81,7 +81,6 @@ struct reloc
 static struct reloc reloc;
 
 static uint8_t* feed;
-static size_t decompress_idx;
 
 extern uint8_t __prog_start[];
 extern uint8_t __prog_end[];
@@ -196,7 +195,6 @@ platform_init_meta(meta_t* meta)
   }
 
   feed = (uint8_t*)(uintptr_t)META.load_addr;
-  decompress_idx = 0;
 
   return true;
 }
@@ -214,7 +212,6 @@ feed_impl(uint8_t* data, size_t len)
       len -= cnt;
       data += cnt;
       feed += cnt;
-      decompress_idx += cnt;
     }
     if (feed >= reloc.tgt_start && feed < reloc.tgt_end) {
       off = feed - reloc.tgt_start;
@@ -224,7 +221,6 @@ feed_impl(uint8_t* data, size_t len)
       len -= cnt;
       data += cnt;
       feed += cnt;
-      decompress_idx += cnt;
     }
   }
 
@@ -232,7 +228,6 @@ feed_impl(uint8_t* data, size_t len)
     memcpy(feed, data, len);
     printf(BOOT FUNC("platform_feed") "direct copy to [%p,%p)\n", feed, feed + len);
     feed += len;
-    decompress_idx += len;
   }
 }
 
@@ -266,9 +261,6 @@ platform_feed(size_t chunk_no, uint8_t* data, size_t len)
           printf(BOOT FUNC("platform_feed") "inflated %d->%d bytes\n",
                  xzbuf.in_pos - prev_in_pos,
                  xzbuf.out_pos);
-          printf(BOOT FUNC("platform_feed") "decompressed byte at %x is %hhx\n",
-                 decompress_idx,
-                 decompress_buffer[0]);
           feed_impl(decompress_buffer, xzbuf.out_pos);
           break;
         case XZ_UNSUPPORTED_CHECK:
