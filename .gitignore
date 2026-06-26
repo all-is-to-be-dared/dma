@@ -1,0 +1,7 @@
+/target-*
+*.o
+*.elf
+*.bin
+*.a
+.ninja_deps
+.ninja_log

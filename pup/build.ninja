@@ -1,0 +1,32 @@
+build pup/bcm2835.bin: arm_objcopy pup/bcm2835.elf
+build pup/bcm2835.elf: arm_link $
+  pup/fsm.arm1176.o pup/crc.arm1176.o pup/fcs.arm1176.o $
+  pup/bcm2835.o pup/trampolines/bcm2835.o $
+  bcm2835/libplatform.a bcm2835/libnewlib_machine.a bcm2835/libnewlib.a $
+  | pup/bcm2835.ld
+  ldflags_ext = -Tpup/bcm2835.ld
+  libs = bcm2835/libgcc.a 
+build pup/bcm2835.o: arm_cc pup/bcm2835.c
+build pup/trampolines/bcm2835.o: arm_cc pup/trampolines/bcm2835.S
+
+build pup/fsm.arm1176.o: arm_cc pup/fsm.c
+  cflags_ext = -DNO_UPLOAD=1
+build pup/crc.arm1176.o: arm_cc pup/crc.c
+build pup/fcs.arm1176.o: arm_cc pup/fcs.c
+
+default pup/bcm2835.bin
+
+
+build bin/pup: host_link $
+  pup/host.o pup/host_macos.o pup/host_linux.o $
+  pup/fsm.host.o pup/crc.host.o pup/fcs.host.o
+build pup/host.o: host_cc pup/host.c
+build pup/host_macos.o: host_cc pup/host_macos.c
+build pup/host_linux.o: host_cc pup/host_linux.c
+
+build pup/fsm.host.o: host_cc pup/fsm.c
+  cflags_ext = -DNO_DOWNLOAD=1
+build pup/crc.host.o: host_cc pup/crc.c
+build pup/fcs.host.o: host_cc pup/fcs.c
+
+default bin/pup

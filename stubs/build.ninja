@@ -1,0 +1,5 @@
+build stubs/blink.bin: arm_objcopy stubs/blink.elf
+build stubs/blink.elf: arm_link stubs/blink.o
+build stubs/blink.o: arm_cc stubs/blink.S
+
+default stubs/blink.bin

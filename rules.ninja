@@ -1,0 +1,51 @@
+# Note: this is a raw escape character. Use `:show list` in Vim to see it.
+_ansi_esc = 
+_green = ${_ansi_esc}[32m
+_magenta = ${_ansi_esc}[35m
+_reset = ${_ansi_esc}[0m
+
+
+
+
+arm_cflags = -Wall -O2 -I. -ffreestanding -nostdlib -nostartfiles -std=gnu23 -march=armv6zk $
+             -mcpu=arm1176jzf-s -fdiagnostics-color
+arm_ldflags = -z noexecstack --gc-sections -static
+
+rule arm_cc
+  command = arm-none-eabi-gcc -MD -MF ${out}.d ${arm_cflags} ${cflags_ext} -c ${in} -o ${out}
+  deps = gcc
+  depfile = ${out}.d
+  description = ${_green}[ARM_CC]${_reset} ${out}
+
+rule arm_mklib
+  command = arm-none-eabi-ar rcs ${out} ${in}
+  description = ${_green}[ARMAR]${_reset} ${out}
+
+rule arm_link
+  command = arm-none-eabi-ld ${arm_ldflags} ${ldflags_ext} ${in} ${libs} -o ${out}
+  description = ${_green}[ARMLD]${_reset} ${out}
+
+rule arm_objcopy
+  command = arm-none-eabi-objcopy -O binary ${in} ${out}
+  description = ${_green}[ARMOCP]${_reset} ${out}
+
+rule pi-install
+  command = bin/pi-install ${in}
+  description = ${_green}[PI-INSTALL]${_reset} ${in}
+
+
+
+
+host_cc = clang-22
+host_cflags = -std=c2y -O2 -I.
+host_ldflags =
+
+rule host_cc
+  command = ${host_cc} -MD -MF ${out}.d ${host_cflags} ${cflags_ext} -c ${in} -o ${out}
+  deps = gcc
+  depfile = ${out}.d
+  description = ${_magenta}[HOSTCC]${_reset} ${out}
+
+rule host_link
+  command = ${host_cc} ${host_ldflags} ${ldflags_ext} ${in} -o ${out}
+  description = ${_magenta}[HOSTLD]${_reset} ${out}

@@ -1,0 +1,6 @@
+BasedOnStyle: Mozilla
+SortIncludes: false
+ColumnLimit: 100
+MaxEmptyLinesToKeep: 4
+AlignEscapedNewlines: Left
+# AllowShortIfStatementsOnASingleLine: AllIfsAndElse

@@ -1,0 +1,13 @@
+build bcm2835/libplatform.a: arm_mklib $
+  bcm2835/init.o bcm2835/pwrman.o bcm2835/uart.o bcm2835/gpio.o bcm2835/printf.o bcm2835/systmr.o
+build bcm2835/init.o: arm_cc bcm2835/init.c
+build bcm2835/pwrman.o: arm_cc bcm2835/pwrman.c
+build bcm2835/uart.o: arm_cc bcm2835/uart.c
+build bcm2835/gpio.o: arm_cc bcm2835/gpio.c
+build bcm2835/printf.o: arm_cc printf/printf.c
+  cflags_ext = -DPRINTF_DISABLE_SUPPORT_FLOAT=1
+build bcm2835/systmr.o: arm_cc bcm2835/systmr.c
+
+default bcm2835/libplatform.a
+
+include bcm2835/libc/build.ninja
