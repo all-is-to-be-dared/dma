@@ -24,10 +24,8 @@ host_xz_lib  = -L/opt/homebrew/opt/xz/lib/
 # -------------------------------------------------------------------------------------------------
 # OS-specific libraries
 
-# TASK :: Uncomment whichever one is applicable for you
+# Should *Just Work* (tm), but it's here if you need to override it.
 
-# macOS:
-#pup_libs_host  = -framework IOKit -framework CoreFoundation
-
-# Linux
-pup_libs_host = 
+pup_libs_host = $$(if [[ "$$(uname)" = "Darwin" ]] ; then $
+                  echo "-framework IOKit -framework CoreFoundation" ; $
+                  fi )

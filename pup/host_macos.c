@@ -1,12 +1,11 @@
 #ifdef __APPLE__
 
-#define _POSIX_C_SOURCE 199309L
-
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <errno.h>
 #include <termios.h>
+#define _POSIX_C_SOURCE 199309L
 #include <time.h>
 
 #include <mach/mach_error.h>
@@ -452,70 +451,6 @@ find_serial_device(const char* dev, int* fd, uint32_t baud)
   } else {
     return find_serial_device_with_path(dev, fd, baud);
   }
-}
-
-
-
-
-bool
-platform_can_read(void)
-{
-  int available;
-  if (ioctl(opts.dev_fd, FIONREAD, &available) == -1) {
-    fprintf(stderr,
-            "%s: failed to get TTY input buffer level: %s (%d)\n",
-            opts.self,
-            strerror(errno),
-            errno);
-    exit(1);
-  }
-
-  return available > 0;
-}
-
-uint8_t
-platform_read(void)
-{
-  uint8_t buf;
-  int r;
-  while ((r = read(opts.dev_fd, &buf, 1)) == -1) {
-    if (errno == EAGAIN)
-      continue;
-    fprintf(stderr, "%s: failed to read from TTY: %s (%d)\n", opts.self, strerror(errno), errno);
-    exit(1);
-  }
-  if (!r) {
-    fprintf(stderr, "%s: TTY disconnected\n", opts.self);
-    exit(1);
-  }
-  return buf;
-}
-
-void
-platform_write(uint8_t c)
-{
-  // printf("host: platform_write: '%c' (%d)\n", c, c);
-  if (write(opts.dev_fd, &c, 1) == -1) {
-    fprintf(stderr, "%s: failed to write to TTY: %s (%d)\n", opts.self, strerror(errno), errno);
-    exit(1);
-  }
-}
-
-uint64_t
-platform_time(void)
-{
-  struct timespec tp;
-  uint64_t micros;
-
-  if (clock_gettime(CLOCK_MONOTONIC_RAW, &tp) == -1) {
-    fprintf(stderr, "%s: failed to get time: %s (%d)\n", opts.self, strerror(errno), errno);
-    exit(1);
-  }
-
-  micros = tp.tv_nsec / 1'000ull;
-  micros += tp.tv_sec * 1'000'000ull;
-
-  return micros;
 }
 
 

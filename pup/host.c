@@ -1,6 +1,5 @@
 #define _XOPEN_SOURCE 600
-#define _POSIX_C_SOURCE 199309L
-
+#define _DEFUALT_SOURCE
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -15,6 +14,9 @@
 #include <inttypes.h>
 #include <ctype.h>
 #include <lzma.h>
+
+#define _POSIX_C_SOURCE 200112L
+#define _DARWIN_C_SOURCE
 #include <time.h>
 
 #include "pup/host.h"
