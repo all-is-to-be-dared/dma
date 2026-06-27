@@ -195,7 +195,7 @@ static const struct opt OPTS[] = {
   { "-a", "--addr", "Address at which to load binary (0x8000)", "<ADDR>", nullptr },
   { "-D", "--debug", "Enable debugging output", NULL, nullptr },
   { "-q", "--quiet", "Don't output anything", NULL, nullptr },
-  { "-R", "--retries", "Don't output anything", NULL, nullptr },
+  { "-R", "--retries", "Max. number of upload cycles to try", "<COUNT>", nullptr },
   NULL_OPT,
 };
 
@@ -222,7 +222,8 @@ print_usage(void)
   printf("NOTE: DEVICE SPECIFIERS\n");
   printf("\tDevices can be specified multiple ways:\n");
   printf("\t  - direct path to callout device\n");
-  printf("\t  - TODO\n");
+  printf("\t  - serial number, in hex (prefix with '@')\n");
+  printf("\tIf no device is specified, then PUP will use any USB-to-Serial modem it can find.\n");
   printf("\n");
 }
 
