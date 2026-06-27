@@ -19,7 +19,7 @@ Device support:
 
 Host support:
  - macOS
- - Linux (*coming soon*)
+ - Linux
 
 ### Building
 
@@ -32,6 +32,9 @@ Debian/Ubuntu:
 ```shell
 $ sudo apt install xz-utils ninja-build picocom
 ```
+
+Note: if you see a message about arm-none-eabi-gcc not supported `-std=c23`, you may need to
+      upgrade your arm-none-eabi-gcc.
 
  1. Edit `pup/config.ninja` to point at your `xzutils` installation.
  2. Edit `rules.ninja` to point to the correct toolchains
