@@ -9,7 +9,8 @@
 #include "bcm2835/platform.h"
 #define SIDE BOOT
 #elif !NO_UPLOAD
-#include <stdio.h>
+#include "pup/host.h"
+#define printf(...) host_printf(DBG_FULL, __VA_ARGS__)
 #define SIDE HOST
 #endif
 
@@ -360,13 +361,10 @@ reset:
 
   while (1) {
     if (FSM_OK == fsm_recv(&framebuf)) {
-      printf(BOOT "received frame, TYPE=%c%c%c%c IDEN=%hu PLEN=%hu\n",
-             framebuf.type[0],
-             framebuf.type[1],
-             framebuf.type[2],
-             framebuf.type[3],
-             framebuf.iden,
-             framebuf.plen);
+      // printf(BOOT "received frame (INIT), TYPE=%.4s IDEN=%hu PLEN=%hu\n",
+      //        framebuf.type,
+      //        framebuf.iden,
+      //        framebuf.plen);
       if (!memcmp(framebuf.type, HOST_POLL, 4) && framebuf.iden == 0 &&
           framebuf.plen == sizeof meta) {
         memcpy(&meta, framebuf.raw_body, sizeof meta);
@@ -399,10 +397,15 @@ reset:
       r = fsm_recv(&framebuf);
       // uint64_t t1 = platform_time();
       // printf(BOOT "wait for CHNK for %lluμs, %s\n", t1-t0, FSM_STATUS_NAMES[r]);
-      printf(BOOT "received frame, TYPE=%.4s IDEN=%hu PLEN=%hu\n",
-             framebuf.type,
-             framebuf.iden,
-             framebuf.plen);
+      // printf(BOOT "RESET=%llu/%llu/%d now=%llu\n",
+      //        fsm.timers[TIMER_RESET].last,
+      //        fsm.timers[TIMER_RESET].period,
+      //        fsm.timers[TIMER_RESET].active,
+      //        platform_time());
+      // printf(BOOT "received frame (CHNK), TYPE=%.4s IDEN=%hu PLEN=%hu\n",
+      //        framebuf.type,
+      //        framebuf.iden,
+      //        framebuf.plen);
       if (r == FSM_RESET)
         goto reset;
       if (r == FSM_RESEND)
@@ -411,13 +414,13 @@ reset:
         break;
     }
 
-    fsm_timer_clear(TIMER_RESET, platform_time());
-    fsm.timers[TIMER_RESET].active = false;
-    fsm.iden += 1;
-
+    // fsm.timers[TIMER_RESET].active = false;
     if(!platform_feed(chunk_num, framebuf.body, framebuf.plen)) {
       goto reset;
     }
+    fsm_timer_clear(TIMER_RESET, platform_time());
+    fsm.iden += 1;
+
     chunk_num += 1;
   }
 
@@ -492,7 +495,7 @@ fsm_upload(config_t* config,
   fsm.timers[TIMER_SYMBOL].active = true;
 
   for(i = 0;i < NUM_TIMERS;i++) {
-    printf(HOST FUNC("config") "%s period: %lluμs\n", TIMER_NAMES[i], fsm.timers[i].period);
+    host_printf(DBG_MIN, HOST FUNC("config") "%s period: %lluμs\n", TIMER_NAMES[i], fsm.timers[i].period);
   }
 
   retries = retries_ + 1;
@@ -501,23 +504,23 @@ fsm_upload(config_t* config,
 reset:
   if (!(retries--))
     return UPLOAD_TIMEOUT;
+  host_printf(DBG_MIN, HOST "Polling device (%d/%d)\n", retries_ - retries, retries_);
   fsm.iden = 0;
-  fsm.timers[TIMER_RESET].active = false;
   fsm.timers[TIMER_RESEND].active = false;
+  // Need to init TIMER_RESET so that if the device doesn't respond, we can still stop after a
+  // certain point.
+  fsm_timer_clear(TIMER_RESET, platform_time());
+  // fsm.timers[TIMER_RESET].active = false;
 
   while (1) {
     fsm_send(HOST_POLL, (void*)meta, sizeof *meta);
     fsm_timer_clear(TIMER_RESEND, platform_time());
 
-    uint64_t t0 = platform_time();
     r = fsm_recv_ack(0);
-    uint64_t t1 = platform_time();
     if (r == FSM_RESET)
       goto reset;
     if (r == FSM_OK)
       break;
-
-    printf(HOST "resending HOST_POLL after %lluμs\n", t1 - t0);
   }
 
   hooks.on_poll_acked();
@@ -536,10 +539,15 @@ reset:
 
     // printf(HOST "received: %.4s\n", framebuf.type);
 
-    if (!memcmp(DEV_BEAT, framebuf.type, 4) && framebuf.plen == 0)
+    if (!memcmp(DEV_BEAT, framebuf.type, 4) && framebuf.plen == 0) {
+      hooks.on_all_chunks();
       break;
-    if (!memcmp(DEV_BOOT, framebuf.type, 4) && framebuf.plen == sizeof boot)
+    }
+    if (!memcmp(DEV_BOOT, framebuf.type, 4) && framebuf.plen == sizeof boot) {
+      hooks.on_all_chunks();
       goto received_boot;
+    }
+
     if (!memcmp(DEV_RQCH, framebuf.type, 4) && framebuf.plen == sizeof
                                                chunk_req) {
       memcpy(&chunk_req, framebuf.body, sizeof chunk_req);
@@ -547,7 +555,7 @@ reset:
       if (!platform_marshal(chunk_req.num, &marshal_data, &marshal_len))
         continue;
 
-      printf(HOST "received chunk request (%" PRIi32 "), sending (%huB)\n", chunk_req.num, marshal_len);
+      host_printf(DBG_FULL, HOST "received chunk request (%" PRIi32 "), sending (%huB)\n", chunk_req.num, marshal_len);
 
       uint16_t save_iden = fsm.iden;
       fsm.iden = framebuf.iden;
@@ -569,11 +577,11 @@ reset:
   while (1) {
     r = fsm_recv(&framebuf);
     if (r == FSM_RESET) {
-      printf(HOST "timed out waiting for BEAT/BOOT\n");
+      // printf(HOST "timed out waiting for BEAT/BOOT\n");
       goto reset;
     }
 
-    printf(HOST "received: %.4s\n", framebuf.type);
+    // printf(HOST "received: %.4s\n", framebuf.type);
 
     if (!memcmp(DEV_BEAT, framebuf.type, 4) && framebuf.plen == 0) {
       hooks.on_heartbeat();
@@ -586,7 +594,7 @@ reset:
   }
 
 received_boot:
-  printf(HOST "received BOOT frame, ok=%d\n", boot.is_ok);
+  // host_printf(HOST "received BOOT frame, ok=%d\n", boot.is_ok);
   fsm_send_ack(framebuf.iden);
   memcpy(&boot, framebuf.body, sizeof boot);
   return boot.is_ok ? UPLOAD_OK : UPLOAD_FAILED;

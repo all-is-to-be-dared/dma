@@ -235,10 +235,11 @@ enum fsm_upload_status
 };
 struct uploader_hooks
 {
-  void (*on_poll_acked)();
+  void (*on_poll_acked)(void);
   void (*on_sent_chunk)(uint32_t);
-  void (*on_heartbeat)();
+  void (*on_heartbeat)(void);
   void (*on_passthru)(uint8_t);
+  void (*on_all_chunks)(void);
 };
 enum fsm_upload_status
 fsm_upload(config_t* config,

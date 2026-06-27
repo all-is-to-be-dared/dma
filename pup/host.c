@@ -28,6 +28,8 @@ opts_t opts = {
   .is_pty = false,
   .headless = false,
   .con_baud = 115200,
+  .debug = DBG_MIN,
+  .retries = 10,
   ._print_usage = false,
 };
 
@@ -47,6 +49,7 @@ parse_opts(int argc, char** argv)
     OPT_DEV,
     OPT_LOAD,
     OPT_CON_BAUD,
+    OPT_RETRIES,
   } curr = OPT_NONE;
   if (argc == 1)
     opts._print_usage = true;
@@ -66,6 +69,7 @@ parse_opts(int argc, char** argv)
         }
         curr = OPT_NONE;
         continue;
+      case OPT_RETRIES:
       case OPT_LOAD:
       case OPT_CON_BAUD:
         errno = 0;
@@ -83,14 +87,22 @@ parse_opts(int argc, char** argv)
             stderr, "%s: couldn't parse %s value: %s\n", opts.self, argv[i - 1], strerror(errno));
           opts._print_usage = true;
         } else {
-          if(curr == OPT_LOAD)
+          if (curr == OPT_LOAD)
             opts.load_addr = nv;
-          if(curr == OPT_CON_BAUD) {
-            if(nv > UINT32_MAX) {
+          else if (curr == OPT_CON_BAUD) {
+            if (nv > UINT32_MAX) {
               fprintf(stderr, "%s: console baud rate too large (must be < 2^32)\n", opts.self);
               opts._print_usage = true;
             } else {
               opts.con_baud = nv;
+            }
+          }
+          else if (curr == OPT_RETRIES) {
+            if (nv > UINT8_MAX) {
+              fprintf(stderr, "%s: console baud rate too large (must be < 256)\n", opts.self);
+              opts._print_usage = true;
+            } else {
+              opts.retries = nv;
             }
           }
         }
@@ -111,6 +123,12 @@ parse_opts(int argc, char** argv)
       curr = OPT_LOAD;
     else if (!strcmp(argv[i], "-d") || !strcmp(argv[i], "--dev"))
       curr = OPT_DEV;
+    else if (!strcmp(argv[i], "-D") || !strcmp(argv[i], "--debug"))
+      opts.debug = DBG_FULL;
+    else if (!strcmp(argv[i], "-q") || !strcmp(argv[i], "--quiet"))
+      opts.debug = DBG_NONE;
+    else if (!strcmp(argv[i], "-R") || !strcmp(argv[i], "--retries"))
+      opts.debug = OPT_RETRIES;
     else {
       if (opts.inp_fd == -1) {
         opts.inp_path = argv[i];
@@ -140,12 +158,13 @@ parse_opts(int argc, char** argv)
 
 
 
-struct opt {
-  const char *short_;
-  const char *long_;
-  const char *help;
-  const char *val;
-  bool (*parse)(const char *);
+struct opt
+{
+  const char* short_;
+  const char* long_;
+  const char* help;
+  const char* val;
+  bool (*parse)(const char*);
 };
 static const struct opt NULL_OPT = { NULL, NULL, NULL, 0, NULL };
 
@@ -157,8 +176,15 @@ static const struct opt OPTS[] = {
   { "-d", "--dev", "Device to upload to", "<DEV>", nullptr },
   { "-p", "--pty", "Device is a PTY", NULL, nullptr },
   { "-H", "--headless", "Do not open post-upload console", NULL, nullptr },
-  { "-B", "--console-baud", "Initial baud rate for post-upload console (115200)", "<BAUD>", nullptr },
+  { "-B",
+    "--console-baud",
+    "Initial baud rate for post-upload console (115200)",
+    "<BAUD>",
+    nullptr },
   { "-a", "--addr", "Address at which to load binary (0x8000)", "<ADDR>", nullptr },
+  { "-D", "--debug", "Enable debugging output", NULL, nullptr },
+  { "-q", "--quiet", "Don't output anything", NULL, nullptr },
+  { "-R", "--retries", "Don't output anything", NULL, nullptr },
   NULL_OPT,
 };
 
@@ -168,7 +194,7 @@ static const struct opt OPTS[] = {
 void
 print_usage(void)
 {
-  const struct opt *curr;
+  const struct opt* curr;
 
   printf("\x1b[1mP\x1b[0mrogram \x1b[1mUP\x1b[0mloader \"PUP\" v0.1.0\tMaximilien Cura\n");
   printf("\n");
@@ -176,7 +202,7 @@ print_usage(void)
   printf("\n");
   printf("OPTIONS:\n");
 
-  for(curr = OPTS;memcmp(curr, &NULL_OPT, sizeof *curr);curr++) {
+  for (curr = OPTS; memcmp(curr, &NULL_OPT, sizeof *curr); curr++) {
     char buf[20];
     snprintf(buf, sizeof buf, "%s, %s", curr->short_, curr->long_);
     printf("\t%-20s\x1b[1m%-8s\x1b[0m%s\n", buf, curr->val ? curr->val : "", curr->help);
@@ -192,28 +218,71 @@ print_usage(void)
 
 
 
+static int total_chunks, last_show;
+
+
+
+
 static void
 hook_heartbeat(void)
 {
-  //
 }
 
 static void
 hook_poll_acked(void)
 {
-  printf("\x1b[35mHOST\x1b[0m: POLL was acked\n");
+  host_printf(DBG_MIN, "\x1b[35mHOST\x1b[0m: Device responded to poll\n");
 }
 
 static void
 hook_sent_chunk(uint32_t no)
 {
-  //
+  uint32_t show, i;
+
+  show = 80 * no / (total_chunks - 1);
+  if (show != last_show && opts.debug == DBG_MIN) {
+    // no / total_chunks * 80
+    printf("\r[");
+    for (i = 0; i < 80; i++) {
+      if (i < show) {
+        putchar('=');
+      } else if (i == show) {
+        putchar('>');
+      } else {
+        putchar(' ');
+      }
+    }
+    printf("]");
+    fflush(stdout);
+  } else if (opts.debug == DBG_FULL) {
+    printf("[");
+    for (i = 0; i < 80; i++) {
+      if (i < show) {
+        putchar('=');
+      } else if (i == show) {
+        putchar('>');
+      } else {
+        putchar(' ');
+      }
+    }
+    printf("]\n");
+  }
+  last_show = show;
+}
+
+static void
+hook_all_chunks(void)
+{
+  if(opts.debug == DBG_MIN)
+    printf("\n");
 }
 
 static void
 hook_passthru(uint8_t c)
 {
-  // printf("passthru: '%c' (<%d>)\n", c, c);
+  if (opts.debug < DBG_FULL)
+    return;
+
   if (isprint(c) || c == 0x1b || isspace(c) || c > 0x80)
     putchar(c);
   else
@@ -271,12 +340,13 @@ platform_marshal(size_t chunk_no, uint8_t** data, uint16_t* len)
             opts.inp_path,
             strerror(errno),
             errno);
-    return false;
+    exit(1);
   } else if (!r) {
-    printf(HOST "ERROR: device requesting chunk %zu which is past the end of %s\n",
-           chunk_no,
-           opts.inp_path);
-    return false;
+    fprintf(stderr,
+            HOST "ERROR: device requesting chunk %zu which is past the end of %s\n",
+            chunk_no,
+            opts.inp_path);
+    exit(1);
   } else {
     assert(r > 0 && r < 0x1'0000);
     *len = r;
@@ -440,6 +510,7 @@ main(int argc, char** argv)
   uint32_t inp_crc;
   struct stat st;
   enum compress_type compress;
+  enum fsm_upload_status sta;
 
   parse_opts(argc, argv);
   if (opts._print_usage) {
@@ -467,15 +538,16 @@ main(int argc, char** argv)
     return EXIT_FAILURE;
   }
   wire_size = st.st_size;
+  total_chunks = (wire_size + 0xfffe) / 0xffff;
 
   inp_crc = input_crc();
 
   compress = COMPRESS_NONE;
   if (is_xz_file()) {
-    printf(HOST "%s is XZ-compressed, switching compression modes\n", opts.inp_path);
+    host_printf(DBG_MIN, HOST "%s is XZ-compressed, switching compression modes\n", opts.inp_path);
     compress = COMPRESS_XZ;
     inp_size = xz_uncompressed_size(opts.inp_fd, wire_size);
-    printf(HOST "%s inflates to %zuB\n", opts.inp_path, inp_size);
+    host_printf(DBG_MIN, HOST "%s inflates to %zuB\n", opts.inp_path, inp_size);
   } else {
     inp_size = wire_size;
   }
@@ -492,15 +564,38 @@ main(int argc, char** argv)
     .on_poll_acked = hook_poll_acked,
     .on_sent_chunk = hook_sent_chunk,
     .on_passthru = hook_passthru,
+    .on_all_chunks = hook_all_chunks,
   };
-  fsm_upload(&config, &meta, NULL, 4, hooks);
+  sta = fsm_upload(&config, &meta, NULL, opts.retries, hooks);
+
+  switch (sta) {
+    case UPLOAD_OK:
+      host_printf(DBG_MIN, HOST "Device booted succcessfully!\n");
+      break;
+    case UPLOAD_TIMEOUT:
+      host_printf(DBG_MIN, HOST "Timed out trying to upload program!\n");
+      return EXIT_FAILURE;
+    case UPLOAD_FAILED:
+      host_printf(DBG_MIN, HOST "Final pre-boot verification failed!\n");
+      return EXIT_FAILURE;
+    default:
+      fprintf(stderr, "%s: unknown status from fsm_upload: %d\n", opts.self, sta);
+      exit(1);
+  }
 
   if (!opts.headless) {
     close(opts.dev_fd);
 
     char baud_string[32];
     snprintf(baud_string, sizeof baud_string, "%" PRIi32, opts.con_baud);
-    execlp("picocom", "picocom", "--noreset", "--imap=lfcrlf", "-b", baud_string, opts.dev_path, (char*)NULL);
+    execlp("picocom",
+           "picocom",
+           "--noreset",
+           "--imap=lfcrlf",
+           "-b",
+           baud_string,
+           opts.dev_path,
+           (char*)NULL);
 
     fprintf(stderr, "%s: failed to start picocom: %s (%d)\n", opts.self, strerror(errno), errno);
     return EXIT_FAILURE;

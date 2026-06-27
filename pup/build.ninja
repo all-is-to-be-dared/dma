@@ -1,3 +1,9 @@
+# Next, pull in information for external (non-vendored) packages we depend on
+include pup/config.ninja
+
+
+
+
 # -------------------------------------------------------------------------------------------------
 # TARGET: pup/bcm2835.bin
 
