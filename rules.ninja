@@ -14,26 +14,27 @@ _reset = ${_ansi_esc}[0m
 # -------------------------------------------------------------------------------------------------
 # ARMv6 COMPILER
 
-arm_cflags = -Wall -O2 -I. -ffreestanding -nostdlib -nostartfiles -std=gnu23 -march=armv6zk $
-             -mcpu=arm1176jzf-s -fdiagnostics-color
-arm_ldflags = -z noexecstack --gc-sections -static
+arm_toolchain = arm-none-eabi-
+arm_cflags    = -Wall -O2 -I. -ffreestanding -nostdlib -nostartfiles -std=gnu23 -march=armv6zk $
+                -mcpu=arm1176jzf-s -fdiagnostics-color
+arm_ldflags    = -z noexecstack --gc-sections -static
 
 rule arm_cc
-  command = arm-none-eabi-gcc -MD -MF ${out}.d ${arm_cflags} ${cflags_ext} -c ${in} -o ${out}
+  command = ${arm_toolchain}gcc -MD -MF ${out}.d ${arm_cflags} ${cflags_ext} -c ${in} -o ${out}
   deps = gcc
   depfile = ${out}.d
   description = ${_green}[ARM_CC]${_reset} ${out}
 
 rule arm_mklib
-  command = arm-none-eabi-ar rcs ${out} ${in}
+  command = ${arm_toolchain}ar rcs ${out} ${in}
   description = ${_green}[ARMAR]${_reset} ${out}
 
 rule arm_link
-  command = arm-none-eabi-ld ${arm_ldflags} ${ldflags_ext} ${in} ${libs} -o ${out}
+  command = ${arm_toolchain}ld ${arm_ldflags} ${ldflags_ext} ${in} ${libs} -o ${out}
   description = ${_green}[ARMLD]${_reset} ${out}
 
 rule arm_objcopy
-  command = arm-none-eabi-objcopy -O binary ${in} ${out}
+  command = ${arm_toolchain}objcopy -O binary ${in} ${out}
   description = ${_green}[ARMOCP]${_reset} ${out}
 
 rule pi-install

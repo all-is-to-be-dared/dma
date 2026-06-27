@@ -36,8 +36,8 @@ $ sudo apt install xz-utils ninja-build picocom
 Note: if you see a message about arm-none-eabi-gcc not supported `-std=c23`, you may need to
       upgrade your arm-none-eabi-gcc.
 
- 1. Edit `pup/config.ninja` to point at your `xzutils` installation.
- 2. Edit `rules.ninja` to point to the correct toolchains
+ 1. Edit `pup/config.ninja`
+ 2. Edit `rules.ninja` to point to the correct toolchains (defaults: `arm-none-eabi-gcc` and `clang-22`)
  3. Run `ninja` from the project root
 
 If everything ran successfully, you should have a `bin/pup` executable and a variety of

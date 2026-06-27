@@ -1,5 +1,20 @@
+# This file allows 'cross-platform' compilation for the PUP host executable
+# You may (or may not) need to edit this file to get PUP to compile.
+#
+# Look for the string "TASK :: " to navigate between parts of the file that need editing.
+
+
+
+
 # -------------------------------------------------------------------------------------------------
 # xzutils installation
+
+# TASK :: Edit these if compilation fails/your XZ is in a nonstandard location
+#
+# Paths for `brew install xz`; won't cause any issues if they don't exist, and
+# `sudo apt install xz-utils` will be fine without extra prodding, so you shouldn't need to edit
+# this unless your XZ is installed in a weird place and the compiler can't find it.
+
 host_xz_incl = -I/opt/homebrew/opt/xz/include/
 host_xz_lib  = -L/opt/homebrew/opt/xz/lib/
 
@@ -8,6 +23,8 @@ host_xz_lib  = -L/opt/homebrew/opt/xz/lib/
 
 # -------------------------------------------------------------------------------------------------
 # OS-specific libraries
+
+# TASK :: Uncomment whichever one is applicable for you
 
 # macOS:
 #pup_libs_host  = -framework IOKit -framework CoreFoundation
