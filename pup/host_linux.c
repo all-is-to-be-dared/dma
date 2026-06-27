@@ -2,6 +2,7 @@
 #if __linux__
 
 #define _POSIX_C_SOURCE 199309L
+#define _DEFAULT_SOURCE
 
 #include <unistd.h>
 #include <sys/ioctl.h>
@@ -9,7 +10,10 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
-// #include <termios.h>
+#include <dirent.h>
+#include <limits.h>
+#include <stdlib.h>
+#include <libgen.h>
 
 #include "pup/host.h"
 #include "pup/common.h"
@@ -24,7 +28,8 @@ static struct termios2 orig_termios;
 
 
 
-static int open_serial_dev(const char *path, uint32_t baud)
+static int
+open_serial_dev(const char* path, uint32_t baud)
 {
   int fd;
   struct termios2 tios;
@@ -167,7 +172,7 @@ static int open_serial_dev(const char *path, uint32_t baud)
   tios.c_cflag &= ~(CBAUD | CBAUDEX);
   tios.c_cflag &= ~((CBAUD | CBAUDEX) << IBSHIFT);
   tios.c_cflag |= BOTHER | (BOTHER << IBSHIFT); // BOTHER=CBAUDEX
-  
+
   tios.c_cflag &= ~(CSIZE);
   tios.c_cflag |= CS8;
   tios.c_cflag &= ~(PARENB);
@@ -255,19 +260,122 @@ error:
 }
 
 static enum find_status
-find_serial_device_auto(int *fd, uint32_t baud)
+find_serial_device_enumerative(const char* needle, int* fd, uint32_t baud)
 {
-  return FIND_NXDEV;
+  DIR* dir;
+  struct dirent* ent;
+  char sys_dev_path[PATH_MAX], *real_dev_path, *walk, serial_path[PATH_MAX], serial_no[128],
+    tty_path[PATH_MAX];
+  int serial_fd;
+  ssize_t r;
+  bool match;
+
+  match = false;
+
+  if (!(dir = opendir("/sys/class/tty"))) {
+    fprintf(
+      stderr, "%s: failed to open /sys/class/tty: %s (%d)\n", opts.self, strerror(errno), errno);
+    exit(1);
+  }
+
+  while ((ent = readdir(dir)) && !match) {
+    if (!strcmp(ent->d_name, ".") || !strcmp(ent->d_name, "..")) {
+      continue;
+    }
+    // okay, we have some kind of TTY
+    snprintf(sys_dev_path, sizeof sys_dev_path, "/sys/class/tty/%s", ent->d_name);
+
+    if (!(real_dev_path = realpath(sys_dev_path, NULL))) {
+      fprintf(stderr,
+              "%s: failed to resolve %s: %s (%d)\n",
+              opts.self,
+              sys_dev_path,
+              strerror(errno),
+              errno);
+      continue;
+    }
+
+    // should look something like:
+    //
+    //   /sys/devices/pci0000:00/0000:00:02.1/0000:02:00.0/0000:03:0c.0/0000:09:00.0/usb1/1-1/1-1.4/
+    //      1-1.4.2/1-1.4.2:1.0/ttyUSB0/tty/ttyUSB0
+    //
+    // we start from the right, and walk upwards until we hit a directory with a 'serial' file
+
+    walk = strdup(real_dev_path);
+
+    while (1) {
+      walk = dirname(walk);
+      if (!strcmp(walk, "/")) {
+        break;
+      }
+      snprintf(serial_path, sizeof serial_path, "%s/serial", walk);
+      if (!access(serial_path, F_OK | R_OK)) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-octal-literals"
+        serial_fd = open(serial_path, O_RDONLY);
+#pragma GCC diagnostic pop
+        if (serial_fd == -1) {
+          fprintf(stderr,
+                  "%s: failed to open %s: %s (%d)\n",
+                  opts.self,
+                  serial_path,
+                  strerror(errno),
+                  errno);
+          break;
+        }
+        r = read(serial_fd, serial_no, sizeof serial_no);
+        if (r == -1) {
+          fprintf(stderr,
+                  "%s: failed to read from %s: %s (%d)\n",
+                  opts.self,
+                  serial_path,
+                  strerror(errno),
+                  errno);
+          close(serial_fd);
+          break;
+        }
+        close(serial_fd);
+
+        char* p = strchr(serial_no, '\n');
+        if (p)
+          *p = '\0';
+
+        snprintf(tty_path, sizeof tty_path, "/dev/%s", ent->d_name);
+        if (!needle) {
+          host_printf(
+            DBG_MIN, HOST "Found matching serial device: %s, serial no. %s\n", tty_path, serial_no);
+          match = true;
+        } else if (!strcmp(serial_no, needle)) {
+          host_printf(DBG_MIN, HOST "Found matching serial device: %s\n", tty_path);
+          match = true;
+        }
+        if(match) {
+          break;
+        }
+      }
+    }
+
+    free(walk);
+    free(real_dev_path);
+  }
+
+  closedir(dir);
+
+  if(!match)
+    return FIND_NXDEV;
+
+  r = open_serial_dev(tty_path, baud);
+  if (r == -1) {
+    return FIND_OPEN_FAIL;
+  } else {
+    *fd = r;
+    return FIND_OK;
+  }
 }
 
 static enum find_status
-find_serial_device_fuzzy(const char *serial, int *fd, uint32_t baud)
-{
-  return FIND_NXDEV;
-}
-
-static enum find_status
-find_serial_device_with_path(const char *dev, int *fd, uint32_t baud)
+find_serial_device_with_path(const char* dev, int* fd, uint32_t baud)
 {
   int r;
   struct stat buf;
@@ -292,12 +400,12 @@ find_serial_device_with_path(const char *dev, int *fd, uint32_t baud)
 }
 
 enum find_status
-find_serial_device(const char *dev, int *fd, uint32_t baud)
+find_serial_device(const char* dev, int* fd, uint32_t baud)
 {
   if (!dev) {
-    return find_serial_device_auto(fd, baud);
+    return find_serial_device_enumerative(NULL, fd, baud);
   } else if (*dev == '@') {
-    return find_serial_device_fuzzy(dev + 1, fd, baud);
+    return find_serial_device_enumerative(dev + 1, fd, baud);
   } else {
     return find_serial_device_with_path(dev, fd, baud);
   }
