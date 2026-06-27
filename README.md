@@ -42,3 +42,15 @@ Note: if you see a message about arm-none-eabi-gcc not supported `-std=c23`, you
 
 If everything ran successfully, you should have a `bin/pup` executable and a variety of
 `bin/XYZ.bin` binaries. The latter can be loaded onto your device in whichever way is customary.
+
+### XZ Support
+
+PUP supports XZ! All you have to do is pass it a path to an XZ-compressed file. Note that there
+_are_ specific compression requirements:
+
+```shell
+xz --arm -k --threads=1 -9 --check=crc32 --lzma2=dict=1Mi path/to/my/program.bin
+bin/pup path/to/my/program.bin.xz
+```
+
+In my experience, this can shrink your program down at least a couple times.
