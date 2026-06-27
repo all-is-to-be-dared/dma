@@ -181,23 +181,20 @@ static const struct opt NULL_OPT = { NULL, NULL, NULL, 0, NULL };
 
 
 
-
+// clang-format off
 static const struct opt OPTS[] = {
   { "-h", "--help", "Show this help", NULL, nullptr },
   { "-d", "--dev", "Device to upload to", "<DEV>", nullptr },
   { "-p", "--pty", "Device is a PTY", NULL, nullptr },
   { "-H", "--headless", "Do not open post-upload console", NULL, nullptr },
-  { "-B",
-    "--console-baud",
-    "Initial baud rate for post-upload console (115200)",
-    "<BAUD>",
-    nullptr },
+  { "-B", "--console-baud", "Initial baud rate for post-upload console (115200)", "<BAUD>", nullptr },
   { "-a", "--addr", "Address at which to load binary (0x8000)", "<ADDR>", nullptr },
   { "-D", "--debug", "Enable debugging output", NULL, nullptr },
   { "-q", "--quiet", "Don't output anything", NULL, nullptr },
   { "-R", "--retries", "Max. number of upload cycles to try", "<COUNT>", nullptr },
   NULL_OPT,
 };
+// clang-format on
 
 
 

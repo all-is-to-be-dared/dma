@@ -1,6 +1,3 @@
-#include <CoreFoundation/CFBase.h>
-#include <IOKit/IOKitKeys.h>
-#include <sys/syslimits.h>
 #ifdef __APPLE__
 
 #include <unistd.h>
