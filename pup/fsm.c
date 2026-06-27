@@ -504,7 +504,8 @@ fsm_upload(config_t* config,
 reset:
   if (!(retries--))
     return UPLOAD_TIMEOUT;
-  host_printf(DBG_MIN, HOST "Polling device (%d/%d)\n", retries_ - retries, retries_);
+  if(retries < retries_)
+    host_printf(DBG_MIN, HOST "Polling device (retry %d/%d)\n", retries_ - retries, retries_);
   fsm.iden = 0;
   fsm.timers[TIMER_RESEND].active = false;
   // Need to init TIMER_RESET so that if the device doesn't respond, we can still stop after a

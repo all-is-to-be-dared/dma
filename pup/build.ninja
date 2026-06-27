@@ -37,7 +37,7 @@ build bin/pup: host_link $
   pup/fsm.host.o pup/crc.host.o pup/fcs.host.o $
   | bin/
   cflags_ext = ${host_xz_lib}
-  libs = -llzma
+  libs = -llzma -framework IOKit -framework CoreFoundation
 build pup/host.o: host_cc pup/host.c
   cflags_ext = ${host_xz_incl}
 build pup/host_macos.o: host_cc pup/host_macos.c

@@ -41,6 +41,7 @@ parse_opts(int argc, char** argv)
 {
   int r;
   uint64_t nv;
+  enum find_status fsta;
 
   opts.self = argv[0];
   enum
@@ -56,14 +57,24 @@ parse_opts(int argc, char** argv)
   for (int i = 1; i < argc; i++) {
     switch (curr) {
       case OPT_DEV:
-        switch (find_serial_device(argv[i], &opts.dev_fd, BAUD_RATE)) {
+        fsta = find_serial_device(argv[i], &opts.dev_fd, BAUD_RATE);
+        switch (fsta) {
           case FIND_OK:
             break;
           case FIND_NXDEV:
+            fprintf(stderr, "%s: No such device %s\n", opts.self, argv[i]);
+            opts._print_usage = true;
+            break;
           case FIND_NOT_CHR:
+            fprintf(stderr, "%s: %s is not a character device\n", opts.self, opts.dev_path);
+            opts._print_usage = true;
+            break;
           case FIND_OPEN_FAIL:
+            fprintf(stderr, "%s: Failed to open %s\n", opts.self, opts.dev_path);
+            opts._print_usage = true;
+            break;
           default:
-            fprintf(stderr, "TODO: IMPLEMENT ME: %s:%i\n", __FILE__, __LINE__);
+            fprintf(stderr, "%s: find_serial_device: unknown error %d\n", opts.self, fsta);
             opts._print_usage = true;
             break;
         }
@@ -510,6 +521,7 @@ main(int argc, char** argv)
   uint32_t inp_crc;
   struct stat st;
   enum compress_type compress;
+  enum find_status fsta;
   enum fsm_upload_status sta;
 
   parse_opts(argc, argv);
@@ -519,16 +531,26 @@ main(int argc, char** argv)
   }
 
   if (opts.dev_fd == -1) {
-    switch (find_serial_device(NULL, &opts.dev_fd, BAUD_RATE)) {
+    fsta = find_serial_device(NULL, &opts.dev_fd, BAUD_RATE);
+    switch (fsta) {
       case FIND_OK:
         break;
       case FIND_NXDEV:
+        fprintf(stderr, "%s: USB enumeration failed to find usable serial modem\n", opts.self);
+        opts._print_usage = true;
+        break;
       case FIND_NOT_CHR:
+        fprintf(stderr, "%s: %s is not a character device\n", opts.self, opts.dev_path);
+        opts._print_usage = true;
+        break;
       case FIND_OPEN_FAIL:
+        fprintf(stderr, "%s: Failed to open %s\n", opts.self, opts.dev_path);
+        opts._print_usage = true;
+        break;
       default:
-        fprintf(stderr, "TODO: IMPLEMENT ME: %s:%i\n", __FILE__, __LINE__);
-        print_usage();
-        return EXIT_FAILURE;
+        fprintf(stderr, "%s: find_serial_device: unknown error %d\n", opts.self, fsta);
+        opts._print_usage = true;
+        break;
     }
   }
 
@@ -566,11 +588,16 @@ main(int argc, char** argv)
     .on_passthru = hook_passthru,
     .on_all_chunks = hook_all_chunks,
   };
+
+  uint64_t t0, t1;
+  t0 = platform_time();
   sta = fsm_upload(&config, &meta, NULL, opts.retries, hooks);
+  t1 = platform_time();
 
   switch (sta) {
     case UPLOAD_OK:
       host_printf(DBG_MIN, HOST "Device booted succcessfully!\n");
+      host_printf(DBG_MIN, HOST "Upload took %'dms.\n", (t1 - t0)/1000);
       break;
     case UPLOAD_TIMEOUT:
       host_printf(DBG_MIN, HOST "Timed out trying to upload program!\n");

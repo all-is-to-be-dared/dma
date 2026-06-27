@@ -1,4 +1,6 @@
-#include <_time.h>
+#include <CoreFoundation/CFBase.h>
+#include <IOKit/IOKitKeys.h>
+#include <sys/syslimits.h>
 #ifdef __APPLE__
 
 #include <unistd.h>
@@ -15,74 +17,11 @@
 #include <IOKit/IOKitLib.h>
 #include <IOKit/serial/IOSerialKeys.h>
 #include <IOKit/serial/ioss.h>
+#include <IOKit/usb/USBSpec.h>
 #include <IOKit/IOBSD.h>
-// #include <CoreFoundation/CFBase.h>
-// #include <CoreFoundation/CFDictionary.h>
-// #include <CoreFoundation/CFString.h>
-// #include <IOKit/IOTypes.h>
 
 #include "pup/host.h"
 #include "pup/common.h"
-
-
-
-
-static kern_return_t
-discover_serial_ports(io_iterator_t* matching_services)
-{
-  kern_return_t kr;
-  CFMutableDictionaryRef matching_dict;
-
-  // Serial devices are instances of IOSerialBSDClient (aka the value of kIOSerialBSDServiceValue),
-  // so we match on such services.
-  matching_dict = IOServiceMatching(kIOSerialBSDServiceValue);
-  if (!matching_dict) {
-    fprintf(stderr, "IOServiceMatching returned a NULL dictionary.\n");
-    return KERN_FAILURE;
-  }
-  CFDictionarySetValue(matching_dict, CFSTR(kIOSerialBSDTypeKey), CFSTR(kIOSerialBSDModemType));
-
-  kr = IOServiceGetMatchingServices(kIOMainPortDefault, matching_dict, matching_services);
-  if (KERN_SUCCESS != kr) {
-    fprintf(stderr, "IOServiceGetMatchingServices: error %d: %s\n", kr, mach_error_string(kr));
-  }
-
-  return kr;
-}
-
-
-
-
-static kern_return_t
-get_device_path(io_iterator_t service_iter, char* pathbuf, CFIndex pathcap)
-{
-  io_object_t service;
-  kern_return_t kr = KERN_FAILURE;
-  Boolean found = false, result;
-  CFTypeRef callout_device_path, name, vendor_id, product_id;
-
-  assert(pathcap > 0);
-  *pathbuf = '\0';
-
-  while ((service = IOIteratorNext(service_iter)) && !found) {
-    callout_device_path =
-      IORegistryEntryCreateCFProperty(service, CFSTR(kIOCalloutDeviceKey), kCFAllocatorDefault, 0);
-    if (callout_device_path) {
-      result = CFStringGetCString(callout_device_path, pathbuf, pathcap, kCFStringEncodingUTF8);
-      CFRelease(callout_device_path);
-
-      if (result) {
-        printf("serial modem at: %s\n", pathbuf);
-        found = true;
-        kr = KERN_SUCCESS;
-      }
-    }
-
-    (void)IOObjectRelease(service);
-  }
-
-  return kr;
-}
 
 
 
@@ -100,6 +39,7 @@ open_serial_dev(const char* path, uint32_t baud)
   speed_t speed;
   unsigned long latency;
 
+  opts.dev_path = strdup(path);
   speed = baud;
 
   // want open to be nonblocking (but not subsequent operations), so we clear O_NONBLOCK later on
@@ -288,8 +228,6 @@ open_serial_dev(const char* path, uint32_t baud)
     }
   }
 
-  opts.dev_path = path;
-
   return fd;
 
 error:
@@ -303,10 +241,102 @@ error:
 
 
 
+static kern_return_t
+discover_serial_ports(io_iterator_t* matching_services)
+{
+  kern_return_t kr;
+  CFMutableDictionaryRef matching_dict;
+
+  // Serial devices are instances of IOSerialBSDClient (aka the value of kIOSerialBSDServiceValue),
+  // so we match on such services.
+  matching_dict = IOServiceMatching(kIOSerialBSDServiceValue);
+  if (!matching_dict) {
+    fprintf(stderr, "IOServiceMatching returned a NULL dictionary.\n");
+    return KERN_FAILURE;
+  }
+  CFDictionarySetValue(matching_dict, CFSTR(kIOSerialBSDTypeKey), CFSTR(kIOSerialBSDModemType));
+
+  kr = IOServiceGetMatchingServices(kIOMainPortDefault, matching_dict, matching_services);
+  if (KERN_SUCCESS != kr) {
+    fprintf(stderr, "IOServiceGetMatchingServices: error %d: %s\n", kr, mach_error_string(kr));
+  }
+
+  return kr;
+}
+
+
+
+
 static enum find_status
 find_serial_device_auto(int* fd, uint32_t baud)
 {
-  return FIND_NXDEV;
+  // Enumeration behavior: the first serial modem that is also a IOUSBHostDevice
+
+  io_iterator_t iter;
+  char pbuf[PATH_MAX], serialbuf[128];
+  io_object_t service;
+  kern_return_t kr = KERN_FAILURE;
+  Boolean found = false, result;
+  CFTypeRef callout_dev, serial;
+  io_registry_entry_t curr, next, device;
+  int r;
+
+  discover_serial_ports(&iter);
+
+  pbuf[0] = '\0';
+
+  while ((service = IOIteratorNext(iter)) && !found) {
+    callout_dev =
+      IORegistryEntryCreateCFProperty(service, CFSTR(kIOCalloutDeviceKey), kCFAllocatorDefault, 0);
+    if (callout_dev) {
+      result = CFStringGetCString(callout_dev, pbuf, PATH_MAX, kCFStringEncodingUTF8);
+      CFRelease(callout_dev);
+
+      if (result) {
+        // now walk up through the registry tree to find the IOUSBHostDevice
+        device = 0;
+        curr = service;
+        while (IORegistryEntryGetParentEntry(curr, kIOServicePlane, &next) == KERN_SUCCESS) {
+          if (curr != service)
+            (void)IOObjectRelease(curr);
+          curr = next;
+          if (IOObjectConformsTo(curr, "IOUSBHostDevice")) {
+            device = curr;
+            break;
+          }
+        }
+
+        if (device) {
+          serial = IORegistryEntryCreateCFProperty(
+            device, CFSTR(kUSBSerialNumberString), kCFAllocatorDefault, 0);
+          if (serial) {
+            result = CFStringGetCString(serial, serialbuf, sizeof serialbuf, kCFStringEncodingUTF8);
+            if (result) {
+              host_printf(
+                DBG_MIN, HOST "Found matching serial device: %s, serial no. %s\n", pbuf, serialbuf);
+              found = true;
+            }
+          }
+
+          if (device != service)
+            (void)IOObjectRelease(device);
+        }
+      }
+    }
+
+    (void)IOObjectRelease(service);
+  }
+  if (!found)
+    return FIND_NXDEV;
+
+  r = open_serial_dev(pbuf, baud);
+
+  if (r == -1) {
+    return FIND_OPEN_FAIL;
+  } else {
+    *fd = r;
+    return FIND_OK;
+  }
 }
 
 
@@ -315,7 +345,72 @@ find_serial_device_auto(int* fd, uint32_t baud)
 static enum find_status
 find_serial_device_fuzzy(const char* string, int* fd, uint32_t baud)
 {
-  return FIND_NXDEV;
+  io_iterator_t iter;
+  char pbuf[PATH_MAX], serialbuf[128];
+  io_object_t service;
+  kern_return_t kr = KERN_FAILURE;
+  Boolean found = false, result;
+  CFTypeRef callout_dev, serial;
+  io_registry_entry_t curr, next, device;
+  int r;
+
+  discover_serial_ports(&iter);
+
+  pbuf[0] = '\0';
+
+  while ((service = IOIteratorNext(iter)) && !found) {
+    callout_dev =
+      IORegistryEntryCreateCFProperty(service, CFSTR(kIOCalloutDeviceKey), kCFAllocatorDefault, 0);
+    if (callout_dev) {
+      result = CFStringGetCString(callout_dev, pbuf, PATH_MAX, kCFStringEncodingUTF8);
+      CFRelease(callout_dev);
+
+      if (result) {
+        // now walk up through the registry tree to find the IOUSBHostDevice
+        device = 0;
+        curr = service;
+        while (IORegistryEntryGetParentEntry(curr, kIOServicePlane, &next) == KERN_SUCCESS) {
+          if (curr != service)
+            (void)IOObjectRelease(curr);
+          curr = next;
+          if (IOObjectConformsTo(curr, "IOUSBHostDevice")) {
+            device = curr;
+            break;
+          }
+        }
+
+        if (device) {
+          serial = IORegistryEntryCreateCFProperty(
+            device, CFSTR(kUSBSerialNumberString), kCFAllocatorDefault, 0);
+          if (serial) {
+            result = CFStringGetCString(serial, serialbuf, sizeof serialbuf, kCFStringEncodingUTF8);
+            if (result) {
+              if (!strcmp(serialbuf, string)) {
+                host_printf(DBG_MIN, HOST "Found matching serial device: %s\n", pbuf);
+                found = true;
+              }
+            }
+          }
+
+          if (device != service)
+            (void)IOObjectRelease(device);
+        }
+      }
+    }
+
+    (void)IOObjectRelease(service);
+  }
+  if (!found)
+    return FIND_NXDEV;
+
+  r = open_serial_dev(pbuf, baud);
+
+  if (r == -1) {
+    return FIND_OPEN_FAIL;
+  } else {
+    *fd = r;
+    return FIND_OK;
+  }
 }
 
 
