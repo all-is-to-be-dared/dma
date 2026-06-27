@@ -1,4 +1,16 @@
 # -------------------------------------------------------------------------------------------------
-# # xzutils installation
+# xzutils installation
 host_xz_incl = -I/opt/homebrew/opt/xz/include/
 host_xz_lib  = -L/opt/homebrew/opt/xz/lib/
+
+
+
+
+# -------------------------------------------------------------------------------------------------
+# OS-specific libraries
+
+# macOS:
+#pup_libs_host  = -framework IOKit -framework CoreFoundation
+
+# Linux
+pup_libs_host = 

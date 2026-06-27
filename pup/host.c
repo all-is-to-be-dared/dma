@@ -1,3 +1,7 @@
+#define _XOPEN_SOURCE 600
+#define _POSIX_C_SOURCE 199309L
+
+
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -6,10 +10,12 @@
 #include <assert.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <inttypes.h>
 #include <ctype.h>
 #include <lzma.h>
+#include <time.h>
 
 #include "pup/host.h"
 #include "pup/common.h"
@@ -63,20 +69,16 @@ parse_opts(int argc, char** argv)
             break;
           case FIND_NXDEV:
             fprintf(stderr, "%s: No such device %s\n", opts.self, argv[i]);
-            opts._print_usage = true;
-            break;
+            exit(1);
           case FIND_NOT_CHR:
             fprintf(stderr, "%s: %s is not a character device\n", opts.self, opts.dev_path);
-            opts._print_usage = true;
-            break;
+            exit(1);
           case FIND_OPEN_FAIL:
             fprintf(stderr, "%s: Failed to open %s\n", opts.self, opts.dev_path);
-            opts._print_usage = true;
-            break;
+            exit(1);
           default:
             fprintf(stderr, "%s: find_serial_device: unknown error %d\n", opts.self, fsta);
-            opts._print_usage = true;
-            break;
+            exit(1);
         }
         curr = OPT_NONE;
         continue;
@@ -143,7 +145,10 @@ parse_opts(int argc, char** argv)
     else {
       if (opts.inp_fd == -1) {
         opts.inp_path = argv[i];
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-octal-literals"
         r = open(argv[i], O_RDONLY);
+#pragma GCC diagnostic pop
         if (r == -1) {
           fprintf(stderr,
                   "%s: couldn't open `%s`: %s (%d)\n",
@@ -248,7 +253,7 @@ hook_sent_chunk(uint32_t no)
 {
   uint32_t show, i;
 
-  show = 80 * no / (total_chunks - 1);
+  show = 80 * (no + 1) / (total_chunks);
   if (show != last_show && opts.debug == DBG_MIN) {
     // no / total_chunks * 80
     printf("\r[");
@@ -330,6 +335,70 @@ input_crc(void)
   }
 
   return crc;
+}
+
+
+
+
+bool
+platform_can_read(void)
+{
+  int available;
+  if (ioctl(opts.dev_fd, FIONREAD, &available) == -1) {
+    fprintf(stderr,
+            "%s: failed to get TTY input buffer level: %s (%d)\n",
+            opts.self,
+            strerror(errno),
+            errno);
+    exit(1);
+  }
+
+  return available > 0;
+}
+
+uint8_t
+platform_read(void)
+{
+  uint8_t buf;
+  int r;
+  while ((r = read(opts.dev_fd, &buf, 1)) == -1) {
+    if (errno == EAGAIN)
+      continue;
+    fprintf(stderr, "%s: failed to read from TTY: %s (%d)\n", opts.self, strerror(errno), errno);
+    exit(1);
+  }
+  if (!r) {
+    fprintf(stderr, "%s: TTY disconnected\n", opts.self);
+    exit(1);
+  }
+  return buf;
+}
+
+void
+platform_write(uint8_t c)
+{
+  // printf("host: platform_write: '%c' (%d)\n", c, c);
+  if (write(opts.dev_fd, &c, 1) == -1) {
+    fprintf(stderr, "%s: failed to write to TTY: %s (%d)\n", opts.self, strerror(errno), errno);
+    exit(1);
+  }
+}
+
+uint64_t
+platform_time(void)
+{
+  struct timespec tp;
+  uint64_t micros;
+
+  if (clock_gettime(CLOCK_MONOTONIC_RAW, &tp) == -1) {
+    fprintf(stderr, "%s: failed to get time: %s (%d)\n", opts.self, strerror(errno), errno);
+    exit(1);
+  }
+
+  micros = tp.tv_nsec / 1'000ull;
+  micros += tp.tv_sec * 1'000'000ull;
+
+  return micros;
 }
 
 
@@ -474,7 +543,7 @@ xz_uncompressed_size(int fd, size_t len)
       case LZMA_SEEK_NEEDED:
         if (lseek(fd, strm.seek_pos, SEEK_SET) == -1) {
           fprintf(stderr,
-                  "%s: failed to seek %s (%llu): %s (%d)\n",
+                  "%s: failed to seek %s (%"PRIi64"): %s (%d)\n",
                   opts.self,
                   opts.inp_path,
                   strm.seek_pos,
@@ -535,20 +604,16 @@ main(int argc, char** argv)
         break;
       case FIND_NXDEV:
         fprintf(stderr, "%s: USB enumeration failed to find usable serial modem\n", opts.self);
-        opts._print_usage = true;
-        break;
+        exit(1);
       case FIND_NOT_CHR:
         fprintf(stderr, "%s: %s is not a character device\n", opts.self, opts.dev_path);
-        opts._print_usage = true;
-        break;
+        exit(1);
       case FIND_OPEN_FAIL:
         fprintf(stderr, "%s: Failed to open %s\n", opts.self, opts.dev_path);
-        opts._print_usage = true;
-        break;
+        exit(1);
       default:
         fprintf(stderr, "%s: find_serial_device: unknown error %d\n", opts.self, fsta);
-        opts._print_usage = true;
-        break;
+        exit(1);
     }
   }
 

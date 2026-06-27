@@ -1,11 +1,12 @@
 #ifdef __APPLE__
 
+#define _POSIX_C_SOURCE 199309L
+
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <errno.h>
 #include <termios.h>
-#define _POSIX_C_SOURCE 199309L
 #include <time.h>
 
 #include <mach/mach_error.h>
@@ -421,7 +422,6 @@ find_serial_device_with_path(const char* dev, int* fd, uint32_t baud)
 
   r = stat(dev, &buf);
   if (!r) {
-// file exists
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-octal-literals"
     if (!S_ISCHR(buf.st_mode)) {
@@ -516,12 +516,6 @@ platform_time(void)
   micros += tp.tv_sec * 1'000'000ull;
 
   return micros;
-}
-
-void
-platform_clear_input_buffer(void)
-{
-  tcflush(opts.dev_fd, TCIFLUSH);
 }
 
 

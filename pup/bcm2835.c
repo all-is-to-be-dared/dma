@@ -406,8 +406,7 @@ trampoline()
   r2 = (uint32_t)reloc.size;
   r3 = META.load_addr;
   r4 = branch_to;
-  __asm__ volatile("bx r5" : : "r"(r0), "r"(r1), "r"(r2), "r"(r3), "r"(r4));
-
+  __asm__ volatile("bx r4" : : "r"(r0), "r"(r1), "r"(r2), "r"(r3), "r"(r4));
   __builtin_unreachable();
 }
 
@@ -421,6 +420,7 @@ main(void)
 
   gpio_pin_set_function(14, FSEL_ALT5);
   gpio_pin_set_function(15, FSEL_ALT5);
+  gpio_pin_set_function(47, FSEL_OUTP);
 
   aux_uart_init(BAUD_RATE, 250'000'000);
 

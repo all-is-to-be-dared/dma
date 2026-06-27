@@ -597,6 +597,8 @@ reset:
 received_boot:
   // host_printf(HOST "received BOOT frame, ok=%d\n", boot.is_ok);
   fsm_send_ack(framebuf.iden);
+  extern int tcdrain(int);
+  tcdrain(opts.dev_fd);
   memcpy(&boot, framebuf.body, sizeof boot);
   return boot.is_ok ? UPLOAD_OK : UPLOAD_FAILED;
 }
