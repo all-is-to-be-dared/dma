@@ -41,6 +41,10 @@ rule pi-install
   command = bin/pi-install ${in}
   description = ${_green}[PI-INSTALL]${_reset} ${in}
 
+rule arm_xz
+  command = xz --arm -k --threads=1 -9 --check=crc32 --lzma2=dict=1Mi $in -c > $out
+  description = ${_green}[ARMXZ]${_reset} ${out}
+
 
 
 

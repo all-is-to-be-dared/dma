@@ -5,11 +5,12 @@
 #include "pup/common.h"
 
 #if !NO_DOWNLOAD
-#include "printf/printf.h"
-#include "bcm2835/platform.h"
+#include <printf/printf.h>
+#include <bcm2835/platform.h>
+#include <bcm2835/arch.h>
 #define SIDE BOOT
 #elif !NO_UPLOAD
-#include "pup/host.h"
+#include <pup/host.h>
 #define printf(...) host_printf(DBG_FULL, __VA_ARGS__)
 #define SIDE HOST
 #endif
@@ -35,7 +36,7 @@ enum fsm_timer
   TIMER_SYMBOL = 2,
   NUM_TIMERS,
 };
-const char *TIMER_NAMES[] = {
+const char* TIMER_NAMES[] = {
   [TIMER_RESET] = "TIMER_RESET",
   [TIMER_RESEND] = "TIMER_RESEND",
   [TIMER_SYMBOL] = "TIMER_SYMBOL",
@@ -61,7 +62,7 @@ enum fsm_status
   FSM_RESET = 1,
   FSM_RESEND = 2,
 };
-const char *FSM_STATUS_NAMES[] = {
+const char* FSM_STATUS_NAMES[] = {
   [FSM_OK] = "FSM_OK",
   [FSM_RESET] = "FSM_RESET",
   [FSM_RESEND] = "FSM_RESEND",
@@ -415,7 +416,7 @@ reset:
     }
 
     // fsm.timers[TIMER_RESET].active = false;
-    if(!platform_feed(chunk_num, framebuf.body, framebuf.plen)) {
+    if (!platform_feed(chunk_num, framebuf.body, framebuf.plen)) {
       goto reset;
     }
     fsm_timer_clear(TIMER_RESET, platform_time());
@@ -494,8 +495,9 @@ fsm_upload(config_t* config,
   fsm.timers[TIMER_SYMBOL].period = config_symbol_timeout_us(config);
   fsm.timers[TIMER_SYMBOL].active = true;
 
-  for(i = 0;i < NUM_TIMERS;i++) {
-    host_printf(DBG_MIN, HOST FUNC("config") "%s period: %lluμs\n", TIMER_NAMES[i], fsm.timers[i].period);
+  for (i = 0; i < NUM_TIMERS; i++) {
+    host_printf(
+      DBG_MIN, HOST FUNC("config") "%s period: %lluμs\n", TIMER_NAMES[i], fsm.timers[i].period);
   }
 
   retries = retries_ + 1;
@@ -504,8 +506,8 @@ fsm_upload(config_t* config,
 reset:
   if (!(retries--))
     return UPLOAD_TIMEOUT;
-  if(retries < retries_)
-    host_printf(DBG_MIN, HOST "Polling device (retry %d/%d)\n", retries_ - retries, retries_);
+  if (retries < retries_)
+    host_printf(DBG_MIN, "\n" HOST "Polling device (retry %d/%d)\n", retries_ - retries, retries_);
   fsm.iden = 0;
   fsm.timers[TIMER_RESEND].active = false;
   // Need to init TIMER_RESET so that if the device doesn't respond, we can still stop after a
@@ -549,14 +551,16 @@ reset:
       goto received_boot;
     }
 
-    if (!memcmp(DEV_RQCH, framebuf.type, 4) && framebuf.plen == sizeof
-                                               chunk_req) {
+    if (!memcmp(DEV_RQCH, framebuf.type, 4) && framebuf.plen == sizeof chunk_req) {
       memcpy(&chunk_req, framebuf.body, sizeof chunk_req);
 
       if (!platform_marshal(chunk_req.num, &marshal_data, &marshal_len))
         continue;
 
-      host_printf(DBG_FULL, HOST "received chunk request (%" PRIi32 "), sending (%huB)\n", chunk_req.num, marshal_len);
+      host_printf(DBG_FULL,
+                  HOST "received chunk request (%" PRIi32 "), sending (%huB)\n",
+                  chunk_req.num,
+                  marshal_len);
 
       uint16_t save_iden = fsm.iden;
       fsm.iden = framebuf.iden;
@@ -570,7 +574,7 @@ reset:
     }
   }
 
-  printf(HOST "started receiving device heartbeat\n");
+  host_printf(DBG_FULL, HOST "started receiving device heartbeat\n");
 
   hooks.on_heartbeat();
   fsm_timer_clear(TIMER_RESET, platform_time());

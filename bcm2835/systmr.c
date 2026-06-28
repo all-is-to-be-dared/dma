@@ -1,8 +1,11 @@
-#include "bcm2835/platform.h"
+#include <bcm2835/platform.h>
+#include <bcm2835/arch.h>
 
-uint64_t systmr_read_raw(void) {
+uint64_t
+systmr_read_raw(void)
+{
   uint32_t hi, hi2, lo;
-  
+
   dsb();
   // read hi-lo-hi; if hi2 != hi1, then retry.
   // we speed this up by doing hi-lo-hi-lo-hi instead of hi-lo-hi--hi-lo-hi--...
@@ -13,6 +16,22 @@ uint64_t systmr_read_raw(void) {
     hi = hi2;
     lo = systmr->clo;
     hi2 = systmr->chi;
-  } while(hi2 != hi);
+  } while (hi2 != hi);
   return ((uint64_t)hi) << 32 | (uint64_t)lo;
+}
+
+void
+systmr_delay_us(uint64_t us)
+{
+  uint64_t start, end;
+  start = systmr_read_raw();
+  end = start + us;
+  if (end == start)
+    return;
+  if (end < start) {
+    while (systmr_read_raw() > start)
+      ;
+  }
+  while (systmr_read_raw() < end)
+    ;
 }

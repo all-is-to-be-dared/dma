@@ -1,0 +1,16 @@
+# --------------------------------------------------------------------------------------------------
+# TARGET: bcm2835-dma/arith-test.bin
+
+build bcm2835-dma/arith_test.bin.xz: arm_xz bcm2835-dma/arith_test.bin
+build bcm2835-dma/arith_test.bin: arm_objcopy bcm2835-dma/arith_test.elf
+build bcm2835-dma/arith_test.elf: arm_link $
+  bcm2835-dma/arith_test.o bcm2835-dma/dmakit.o bcm2835-dma/dma.o $
+  bcm2835/libplatform.a bcm2835/libnewlib_machine.a bcm2835/libnewlib.a $
+  | bcm2835-dma/common.ld
+  ldflags_ext = -Tbcm2835-dma/common.ld
+  libs = bcm2835/libgcc.a
+build bcm2835-dma/arith_test.o: arm_cc bcm2835-dma/arith_test.c
+build bcm2835-dma/dmakit.o: arm_cc bcm2835-dma/dmakit.c
+build bcm2835-dma/dma.o: arm_cc bcm2835-dma/dma.c
+
+default bcm2835-dma/arith_test.bin.xz

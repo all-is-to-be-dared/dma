@@ -22,10 +22,13 @@ volatile uint32_t typedef io32;
 enum
 {
   SYSTMR_BASE = 0x2000'3000,
+  DMA0_BASE = 0x2000'7000,
+  MBOX_BASE = 0x2000'B880,
   PWRMAN_BASE = 0x2010'0000,
   GPIO_BASE = 0x2020'0000,
   AUX_BASE = 0x2021'5000,
   AUX_UART_BASE = 0x2021'5040,
+  DMA15_BASE = 0x20e0'5000,
 };
 
 /*-------------------------------------------------------------------------------------------------
@@ -42,6 +45,27 @@ typedef struct {
 static hw_systmr_t* systmr = (hw_systmr_t*)SYSTMR_BASE;
 
 uint64_t systmr_read_raw(void);
+void systmr_delay_us(uint64_t us);
+static inline void systmr_delay_ms(uint32_t ms) {
+  systmr_delay_us(ms * 1000);
+}
+
+/*-------------------------------------------------------------------------------------------------
+ * MAILBOX
+ */
+
+enum {
+  MBOX_FULL = (1 << 31),
+  MBOX_EMPTY = (1 << 30),
+};
+typedef union {
+  REG(0x00, io32, read);
+  REG(0x18, io32, status);
+  REG(0x20, io32, write);
+} hw_mbox_t;
+[[maybe_unused]]
+static hw_mbox_t *mbox = (hw_mbox_t*)MBOX_BASE;
+
 
 /*-------------------------------------------------------------------------------------------------
  * POWER MANAGEMENT
@@ -172,16 +196,6 @@ aux_uart_can_read(void);
 
 uint8_t
 aux_uart_read(void);
-
-/*-------------------------------------------------------------------------------------------------
- * MISCELLANEOUS
- */
-
-static inline void
-dsb(void)
-{
-  __asm__ volatile("mcr p15, 0, %0, c7, c10, 4" ::"r"(0u));
-}
 
 /*-------------------------------------------------------------------------------------------------
  * PROGRAM EXECUTION

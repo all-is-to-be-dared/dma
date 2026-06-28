@@ -32,5 +32,11 @@ include libc/build.ninja
 
 
 
+# bcm2835-dma/ is the subproject that deals with DMA on the BCM2835
+include bcm2835-dma/build.ninja
+
+
+
+
 # Rule to make the bin/ directory.
 build bin/: mkdir

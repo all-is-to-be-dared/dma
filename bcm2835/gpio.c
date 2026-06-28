@@ -1,4 +1,5 @@
-#include "bcm2835/platform.h"
+#include <bcm2835/platform.h>
+#include <bcm2835/arch.h>
 
 void
 gpio_pin_set_function(uint8_t pin, fsel_t fsel)
