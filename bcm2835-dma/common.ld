@@ -20,6 +20,15 @@ SECTIONS {
     *(.rodata*)
     . = ALIGN(__WORD_ALIGN);
   }
+  .inittab : {
+    . = ALIGN(__WORD_ALIGN);
+    __inittab_start = .;
+    /* Nothing else in the program references these symbols so we use KEEP to force the linker not
+       to GC them*/
+    KEEP(*(.inittab*))
+    __inittab_end = .;
+    . = ALIGN(__WORD_ALIGN);
+  }
   .data : {
     . = ALIGN(__WORD_ALIGN);
     *(.data*)

@@ -1,0 +1,7 @@
+General errata:
+ - There's a hardware bug that happens when SRC_INC=0. The basic idea is that the source draws from
+   the first 128 bits of data, which can have weird interactions in e.g. 2D mode.
+   [ TODO : This needs a better description ]
+
+2D mode errata:
+  - TXFR_LEN.YLENGTH is treated as being 1 higher than it really is

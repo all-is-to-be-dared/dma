@@ -1,8 +1,15 @@
-/target-*
+# compiler byproducts
 *.o
+
+# various binary targets
 *.elf
 *.bin
+*.bin.xz
 *.a
+
+# ninja byproducts
 .ninja_deps
 .ninja_log
+
+# developer byproducts
 compile_commands.json

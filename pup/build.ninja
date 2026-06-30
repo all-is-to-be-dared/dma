@@ -12,7 +12,7 @@ build pup/bcm2835.elf: arm_link $
   pup/fsm.arm1176.o pup/crc.arm1176.o pup/fcs.arm1176.o $
   pup/bcm2835.o pup/trampolines/bcm2835.o $
   pup/xz-embedded/libxz_embedded.bcm2835.a $
-  bcm2835/libplatform.a bcm2835/libnewlib_machine.a bcm2835/libnewlib.a $
+  bcm2835/libplatform.a bcm2835/libc.a $
   | pup/bcm2835.ld
   ldflags_ext = -Tpup/bcm2835.ld
   libs = bcm2835/libgcc.a 

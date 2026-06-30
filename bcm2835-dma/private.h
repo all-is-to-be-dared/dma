@@ -3,7 +3,6 @@
 #include <stdint.h>
 #include "bcm2835/platform.h"
 #include "bcm2835/extra.h"
-#include <inttypes.h>
 
 
 
@@ -95,13 +94,14 @@ bus_to_arm(busad bus)
 typedef struct
 {
   volatile uint32_t ti;
-  volatile busad src_addr, dst_addr;
+  volatile busad src_addr;
+  volatile busad dst_addr;
   volatile uint32_t txfr_len;
   volatile uint32_t stride;
-  volatile uint32_t next_cb;
+  volatile busad next_cb;
 
   volatile uint32_t _ignore0, _ignore1;
-} __attribute__((aligned(0x20))) cblk;
+} __attribute__((aligned(32))) cblk;
 
 enum
 {
@@ -115,8 +115,14 @@ enum
 static inline uint32_t
 stride(uint16_t dst, uint16_t src)
 {
-  assert(dst < 0x3fff);
   return ((uint32_t)dst) << 16 | (uint32_t)src;
+}
+
+static inline uint32_t
+length(uint16_t rows, uint16_t cols)
+{
+  assert(rows < 0x4000);
+  return ((uint32_t)rows) << 16 | (uint32_t)cols;
 }
 
 
@@ -160,7 +166,7 @@ enum
   DMA_CS_ERROR = (1 << 8),
   DMA_CS_OUTSTANDING_WRITES = (1 << 6),
   DMA_CS_PAUSED_BY_DREQ = (1 << 5),
-  DMA_CS_IS_ACTIVE = (1 << 1),
+  DMA_CS_IS_ACTIVE = (1 << 0),
   DMA_CS_START = (1 << 0),
 
   DMA_DEBUG_ERROR_READ = (1 << 2),
@@ -309,3 +315,49 @@ void guard_chain_update(void);
 // Check the current state of memory against the guard chain.
 // Returns `true` if they match, `false` otherwise.
 bool guard_chain_check(bool print_diagnostics);
+
+
+
+
+/* -------------------------------------------------------------------------------------------------
+   INITIALIZERS */
+
+
+
+
+struct initializer {
+  const char *name;
+  void (*func)(void);
+};
+
+void run_initializers(void);
+
+#define INITIALIZER(_name) \
+  void _name(void); \
+  [[gnu::used, gnu::section(".inittab")]] \
+  const struct initializer _Init__##_name = { .name = #_name, .func = _name }; \
+  void _name(void)
+
+
+
+  
+/* -------------------------------------------------------------------------------------------------
+   PROBES */
+
+
+
+
+struct probe {
+  const char *func;
+  const char *name;
+  volatile uint8_t *data;
+  size_t size;
+};
+
+#define Probe(name, data, width) _Probe(__PRETTY_FUNCTION__, name, data, width)
+void
+_Probe(const char *func, const char *name, volatile void *data, size_t width);
+
+void
+ReportProbeInfo(void);
+

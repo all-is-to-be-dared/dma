@@ -1,7 +1,7 @@
 d = libc/
 newlib_cflags = -Inewlib-cygwin/newlib/libc/string/
 
-build bcm2835/libnewlib.a: arm_mklib $d/memcmp.o $d/memchr.o $d/memmove.o $d/memset.o
+build libc/libnewlib.bcm2835.a: arm_mklib $d/memcmp.o $d/memchr.o $d/memmove.o $d/memset.o
 build $d/memcmp.o: arm_cc $d/memcmp.c
   cflags_ext = $newlib_cflags
 build $d/memchr.o: arm_cc $d/memchr.c
@@ -11,6 +11,9 @@ build $d/memmove.o: arm_cc $d/memmove.c
 build $d/memset.o: arm_cc $d/memset.c
   cflags_ext = $newlib_cflags
 
-default bcm2835/libnewlib.a
-
 include libc/newlib-arm/build.ninja
+
+build bcm2835/libc.a: arm_mergelibs libc/libnewlib.bcm2835.a libc/libnewlib_machine.bcm2835.a
+  mri = "create bcm2835/libc.a\naddlib libc/libnewlib.bcm2835.a\naddlib libc/libnewlib_machine.bcm2835.a\nsave\nend"
+
+default bcm2835/libc.a

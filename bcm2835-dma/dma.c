@@ -3,6 +3,7 @@
 #include <bcm2835/extra.h>
 #include <bcm2835/arch.h>
 #include <generic/bits.h>
+#include <printf/printf.h>
 
 struct dma_run_info
 __dma_timed_run(hw_dmachan_t* chan, cblk* init_blk)
@@ -11,6 +12,8 @@ __dma_timed_run(hw_dmachan_t* chan, cblk* init_blk)
   uint64_t us_start, us_end;
   busad init_blk_bus;
 
+
+  assert(init_blk);
   init_blk_bus = arm_to_bus((uintptr_t)init_blk);
 
   dsb();
@@ -33,7 +36,7 @@ __dma_timed_run(hw_dmachan_t* chan, cblk* init_blk)
   us_start = systmr_read_raw();
 
   dsb();
-
+  
   cycle_count_write(0);
   chan->conblk_ad = init_blk_bus;
   chan->cs = DMA_CS_START;
@@ -45,6 +48,8 @@ __dma_timed_run(hw_dmachan_t* chan, cblk* init_blk)
   us_end = systmr_read_raw();
 
   dsb();
+
+  assert(!chan->conblk_ad._0);
 
   status = 0;
 
