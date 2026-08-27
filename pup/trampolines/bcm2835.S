@@ -91,8 +91,8 @@ TRAMPOLINE_START:
     ands r8, r2, #0x0f
     beq .fastreloc_done
 .fastreloc_loop_fine:
-    ldr r4, [r1], +#4
-    str r4, [r0], +#4
+    ldr r4, [r1], #+4
+    str r4, [r0], #+4
     subs r8, r8, #4
     bne .fastreloc_loop_fine
 .fastreloc_done:
@@ -108,8 +108,8 @@ TRAMPOLINE_START:
     teq r2, #0
     beq .slowreloc_done
 .slowreloc_loop:
-    ldr r4, [r1], +#4
-    str r4, [r0], +#4
+    ldr r4, [r1], #+4
+    str r4, [r0], #+4
     subs r2, r2, #4
     bne .slowreloc_loop
 .slowreloc_done:
