@@ -237,9 +237,12 @@ __dma_timed_run(hw_dmachan_t* chan, cblk* init_blk);
    DMA KIT */
 
 
-   
 
-struct dmakit_reservation { enum dma_channel_no chan; };
+
+struct dmakit_reservation
+{
+  enum dma_channel_no chan;
+};
 
 
 
@@ -267,7 +270,7 @@ bool dmakit_channel_is_active(enum dma_channel_no);
 
 
 struct dma_run_info
-dmakit_timed_run(struct dmakit_reservation rsv, cblk *init_blk);
+dmakit_timed_run(struct dmakit_reservation rsv, cblk* init_blk);
 
 
 
@@ -292,9 +295,9 @@ dmakit_timed_run(struct dmakit_reservation rsv, cblk *init_blk);
 struct guard
 {
   // Next guard in the guard chain
-  struct guard *next;
+  struct guard* next;
   // Pointer to region
-  volatile uint8_t *ptr;
+  volatile uint8_t* ptr;
   // Size (in bytes) of region.
   size_t size;
   // CRC of the guarded region
@@ -306,15 +309,20 @@ struct guard
   uint16_t fcs;
 };
 
-void guard_chain_init(void);
-void guard_chain_add(struct guard *g);
-void guard_chain_reset(void);
+void
+guard_chain_init(void);
+void
+guard_chain_add(struct guard* g);
+void
+guard_chain_reset(void);
 
 // Records the current state of memory into the guard chain.
-void guard_chain_update(void);
+void
+guard_chain_update(void);
 // Check the current state of memory against the guard chain.
 // Returns `true` if they match, `false` otherwise.
-bool guard_chain_check(bool print_diagnostics);
+bool
+guard_chain_check(bool print_diagnostics);
 
 
 
@@ -325,39 +333,75 @@ bool guard_chain_check(bool print_diagnostics);
 
 
 
-struct initializer {
-  const char *name;
+struct initializer
+{
+  const char* name;
   void (*func)(void);
 };
 
-void run_initializers(void);
+void
+run_initializers(void);
 
-#define INITIALIZER(_name) \
-  void _name(void); \
-  [[gnu::used, gnu::section(".inittab")]] \
+#define INITIALIZER(_name)                                                     \
+  void _name(void);                                                            \
+  [[gnu::used, gnu::section(".inittab")]]                                      \
   const struct initializer _Init__##_name = { .name = #_name, .func = _name }; \
   void _name(void)
 
 
 
-  
+
 /* -------------------------------------------------------------------------------------------------
    PROBES */
 
 
 
 
-struct probe {
-  const char *func;
-  const char *name;
-  volatile uint8_t *data;
+struct probe
+{
+  const char* func;
+  const char* name;
+  volatile uint8_t* data;
   size_t size;
 };
 
 #define Probe(name, data, width) _Probe(__PRETTY_FUNCTION__, name, data, width)
 void
-_Probe(const char *func, const char *name, volatile void *data, size_t width);
+_Probe(const char* func, const char* name, volatile void* data, size_t width);
 
 void
 ReportProbeInfo(void);
 
+void
+ClearProbes(void);
+
+
+
+
+/* -------------------------------------------------------------------------------------------------
+   RUNTIME MONO */
+
+
+
+#define MonomorphizeOn(_Value, _Expr)                       \
+  ({                                                                   \
+    __typeof__((_Expr)) t;                                             \
+    auto v = (_Value);                                                 \
+    auto ctx = _mono_get_or_init_ctx(__COUNTER__, sizeof t, sizeof v); \
+    if (!_mono_get(ctx, &v, &t)) {                                     \
+      t = (_Expr);                                                     \
+      _mono_set(ctx, &v, &t);                                          \
+    }                                                                  \
+    t;                                                                 \
+  })
+
+struct mono_ctx;
+
+struct mono_ctx*
+_mono_get_or_init_ctx(long i, size_t ks, size_t vs);
+
+bool
+_mono_get(struct mono_ctx*, void* value, void* data);
+
+void
+_mono_set(struct mono_ctx*, void* value, void* data);

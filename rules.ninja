@@ -16,11 +16,17 @@ _reset = ${_ansi_esc}[0m
 
 arm_toolchain = arm-none-eabi-
 arm_cflags    = -Wall -O2 -I. -ffreestanding -nostdlib -nostartfiles -std=gnu23 -march=armv6zk $
-                -mcpu=arm1176jzf-s -fdiagnostics-color
+                -mcpu=arm1176jzf-s -fdiagnostics-color $
+                --target=arm-none-eabi --gcc-install-dir=/usr/lib/gcc/arm-none-eabi/14.2.1/ $
+                -isystem /usr/lib/gcc/arm-none-eabi/14.2.1/include-fixed -isystem /usr/lib/arm-none-eabi/include $
+                --sysroot /usr/lib/arm-none-eabi/ -fshort-enums
+                # -fsanitize=undefined -fsanitize-minimal-runtime $
+                # -fno-omit-frame-pointer
 arm_ldflags    = -z noexecstack --gc-sections -static
 
 rule arm_cc
-  command = ${arm_toolchain}gcc -MD -MF ${out}.d ${arm_cflags} ${cflags_ext} -c ${in} -o ${out}
+  # command = ${arm_toolchain}gcc -MD -MF ${out}.d ${arm_cflags} ${cflags_ext} -c ${in} -o ${out}
+  command = clang-22 -MD -MF ${out}.d ${arm_cflags} ${cflags_ext} -c ${in} -o ${out}
   deps = gcc
   depfile = ${out}.d
   description = ${_green}[ARM_CC]${_reset} ${out}

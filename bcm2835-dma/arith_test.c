@@ -1,4 +1,3 @@
-#include <string.h>
 #include <inttypes.h>
 #include <bcm2835/arch.h>
 #include <bcm2835-dma/private.h>
@@ -54,7 +53,8 @@ main()
   
   run_initializers(); // run all the magic INITIALIZERs
 
-  cblk blocks[1024], *start;
+  static cblk blocks[1024];
+  cblk *start;
   emit_ctx ctx = {
     .base = blocks,
     .p = blocks,
@@ -88,24 +88,79 @@ main()
   }
 
   {
+    enum : uint32_t { A = 0x12345678, B = 17 };
     volatile uint32_t a, b, c;
-    a = 0x12345678;
-    b = 7;
+    a = A;
+    b = B;
 
     start = Here(&ctx);
-    Sll8(&ctx, 4, bus(&c), bus(&a), bus(&b));
+    Sll(&ctx, 4, bus(&c), bus(&a), bus(&b));
     End(&ctx);
 
     for(int i = 0;i < 4;i++) {
       c = 0;
-      printf("Timing 4-wide Sll8... ");
       assert(c == 0);
+      printf("Timing 4-wide Sll... ");
       runinfo = dmakit_timed_run(rsv, start);
-      ReportProbeInfo();
-      assert(a == 0x12345678);
-      assert(b == 7);
-      assert(c == (a << b), "post: c = %08"PRIx32" (expected %08"PRIx32")\n", c, a<<b);
       printf("%dcy\n", runinfo.cycle_end);
+      assert(a == A);
+      assert(b == B);
+      assert(c == (a << b), "post: c = %08"PRIx32" (expected %08"PRIx32")\n", c, a<<b);
+    }
+  }
+
+  {
+    enum { A = 0x12345678, B = 17 };
+    volatile uint32_t a, b, c;
+    a = A;
+    b = B;
+
+    start = Here(&ctx);
+    Srl(&ctx, 4, bus(&c), bus(&a), bus(&b));
+    End(&ctx);
+
+    for(int i = 0;i < 4;i++) {
+      c = 0;
+      assert(c == 0);
+      printf("Timing 4-wide Srl... ");
+      runinfo = dmakit_timed_run(rsv, start);
+      printf("%dcy\n", runinfo.cycle_end);
+      assert(a == A);
+      assert(b == B);
+      assert(c == (a >> b), "post: c = %08"PRIx32" (expected %08"PRIx32")\n", c, a>>b);
+    }
+  }
+
+  // uint32_t f, s;
+  // asm volatile("mov %0, r11\n\tmov %1, r13":"=r"(f),"=r"(s));
+  // printf("(main1) fp=%p sp=%p\n", f, s);
+
+  {
+    enum { A = 0x87654321, B = 1 };
+    volatile int32_t a, b, c;
+    a = A;
+    b = B;
+
+    start = Here(&ctx);
+    Sra(&ctx, 4, bus(&c), bus(&a), bus(&b));
+    End(&ctx);
+    // asm volatile("" :/*outputs*/ :/*inputs*/ :/*clobbers*/ "r11");
+
+    for(int i = 0;i < 4;i++) {
+      c = 0;
+      assert(c == 0);
+      printf("Timing 4-wide Sra... ");
+      runinfo = dmakit_timed_run(rsv, start);
+      printf("%dcy\n", runinfo.cycle_end);
+
+      // uint32_t f, s;
+      // asm volatile("mov %0, r11\n\tmov %1, r13":"=r"(f),"=r"(s));
+      // printf("(main2/4) fp=%p sp=%p\n", f, s);
+
+      ReportProbeInfo();
+      assert(a == A);
+      assert(b == B);
+      assert(c == (a >> b), "post: c = %08"PRIx32" (expected %08"PRIx32")\n", c, a>>b);
     }
   }
 

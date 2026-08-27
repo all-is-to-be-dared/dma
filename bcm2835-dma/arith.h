@@ -22,3 +22,18 @@ Xor(emit_ctx* ctx, size_t width, busad ret, busad lhs, busad rhs);
 
 void
 Sll8(emit_ctx *ctx, size_t width, busad ret, busad inp, busad shf);
+
+void
+Sll(emit_ctx *ctx, size_t width, busad ret, busad inp, busad shf);
+
+void
+Srl8(emit_ctx *ctx, size_t width, busad ret, busad inp, busad shf);
+
+void
+Srl(emit_ctx *ctx, size_t width, busad ret, busad inp, busad shf);
+
+void
+Sra8(emit_ctx *ctx, size_t width, busad ret, busad inp, busad shf);
+
+void
+Sra(emit_ctx *ctx, size_t width, busad ret, busad inp, busad shf);

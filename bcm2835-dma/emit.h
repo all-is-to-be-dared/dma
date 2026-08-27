@@ -310,3 +310,5 @@ static inline void arena_reset(arena *a)
 {
   a->p = a->start;
 }
+
+extern arena ARENA;

@@ -1,7 +1,7 @@
 __LOAD_ADDR = 32K;
 __WORD_ALIGN = 4;
 __STACK_ALIGN = 8;
-__STACK_SIZE = 32K;
+__STACK_SIZE = 640K;
 
 ENTRY(_start)
 ASSERT(DEFINED(_start), "_start MUST be defined")
@@ -18,15 +18,21 @@ SECTIONS {
   .rodata : {
     . = ALIGN(__WORD_ALIGN);
     *(.rodata*)
-    . = ALIGN(__WORD_ALIGN);
-  }
-  .inittab : {
+
     . = ALIGN(__WORD_ALIGN);
     __inittab_start = .;
     /* Nothing else in the program references these symbols so we use KEEP to force the linker not
        to GC them*/
     KEEP(*(.inittab*))
     __inittab_end = .;
+
+    . = ALIGN(__WORD_ALIGN);
+  }
+  .dma : {
+    . = ALIGN(__WORD_ALIGN);
+    __dma_tables_start = .;
+    KEEP(*(.dma.tables*))
+    __dma_tables_end = .;
     . = ALIGN(__WORD_ALIGN);
   }
   .data : {
