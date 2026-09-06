@@ -3,6 +3,7 @@
 
 # various binary targets
 *.elf
+*.elf.xz
 *.bin
 *.bin.xz
 *.a
