@@ -18,7 +18,6 @@ SECTIONS {
   .rodata : {
     . = ALIGN(__WORD_ALIGN);
     *(.rodata*)
-
     . = ALIGN(__WORD_ALIGN);
     __inittab_start = .;
     /* Nothing else in the program references these symbols so we use KEEP to force the linker not
@@ -28,16 +27,25 @@ SECTIONS {
 
     . = ALIGN(__WORD_ALIGN);
   }
-  .dma : {
+  .data : {
+    . = ALIGN(__WORD_ALIGN);
+    *(.data*)
+    . = ALIGN(__WORD_ALIGN);
+  }
+
+  /* IMPORTANT: The linker/objcopy have strong order dependencies. In particular:
+
+      If there are SHT_NOBITS sections in between any of the loadable sections, then the resulting
+      BIN file will have that space filled with zeroes, creating unnecessary bloat.
+
+     Therefore, after this point, all sections MUST be SHT_NOBITS, and before this point, all
+     sections MUST NOT be so.
+   */
+  .dma (TYPE=SHT_NOBITS): {
     . = ALIGN(__WORD_ALIGN);
     __dma_tables_start = .;
     KEEP(*(.dma.tables*))
     __dma_tables_end = .;
-    . = ALIGN(__WORD_ALIGN);
-  }
-  .data : {
-    . = ALIGN(__WORD_ALIGN);
-    *(.data*)
     . = ALIGN(__WORD_ALIGN);
   }
   .bss : {

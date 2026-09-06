@@ -10,6 +10,7 @@ refer to UART). Currently features:
  - robust wire protocol
  - supports high baud rates (e.g. in the megabaud range)
  - supports LZMA2 + BCJ compression (via Tukaani's XZ-embedded)
+ - supports both BIN and ELF formats
 
 PUP consists of two components, a host-side uploader (the eponymous `pup`), and a device-side
 downloader.
@@ -33,11 +34,10 @@ Debian/Ubuntu:
 $ sudo apt install xz-utils ninja-build picocom
 ```
 
-Note: if you see a message about arm-none-eabi-gcc not supported `-std=c23`, you may need to
-      upgrade your arm-none-eabi-gcc.
+Steps:
 
  1. Edit `pup/config.ninja`
- 2. Edit `rules.ninja` to point to the correct toolchains (defaults: `arm-none-eabi-gcc` and `clang-22`)
+ 2. Edit `rules.ninja`
  3. Run `ninja` from the project root
 
 If everything ran successfully, you should have a `bin/pup` executable and a variety of
@@ -49,8 +49,16 @@ PUP supports XZ! All you have to do is pass it a path to an XZ-compressed file. 
 _are_ specific compression requirements:
 
 ```shell
-xz --arm -k --threads=1 -9 --check=crc32 --lzma2=dict=1Mi path/to/my/program.bin
-bin/pup path/to/my/program.bin.xz
+xz --arm -k --threads=1 -9 --check=crc32 --lzma2=dict=1Mi path/to/my/program.elf
+bin/pup path/to/my/program.elf.xz
 ```
 
 In my experience, this can shrink your program down at least a couple times.
+
+Note that this works for both ELF and BIN files.
+
+### ELF Support
+
+A pointer to the `elf_boot_args` structure defined in `pup/protocol.h` will be passed to the
+uploaded program in the 0th argument register (e.g. `r0` for ARM). This allows programs to access
+their own ELF images for e.g. debugging reasons.

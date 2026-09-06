@@ -5,7 +5,7 @@
 #include "pup/common.h"
 
 #if !NO_DOWNLOAD
-#include <printf/printf.h>
+#include <generic/printf.h>
 #include <bcm2835/platform.h>
 #include <bcm2835/arch.h>
 #define SIDE BOOT

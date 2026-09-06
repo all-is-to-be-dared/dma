@@ -1,7 +1,8 @@
 #include <string.h>
 #include <inttypes.h>
+#include <elf.h>
 
-#include "printf/printf.h"
+#include "generic/printf.h"
 
 #include "pup/xz-embedded/xz.h"
 #include "pup/xz_config.h"
@@ -10,7 +11,16 @@
 #include "bcm2835/platform.h"
 #include "pup/common.h"
 #include "pup/config.h"
+#include "generic/assert.h"
+
 #include "pup/trampoline.h"
+
+#include "pup/protocol.h"
+static_assert(sizeof(struct elf_loader_op) == 16 && alignof(struct elf_loader_op) <= 16 &&
+              offsetof(struct elf_loader_op, kind) == 0 &&
+              offsetof(struct elf_loader_op, dst) == 4 &&
+              offsetof(struct elf_loader_op, src) == 8 &&
+              offsetof(struct elf_loader_op, size) == 12);
 
 bool
 platform_can_read(void)
@@ -37,9 +47,9 @@ platform_time(void)
 }
 
 static uint8_t _Alignas(8) xz_arena[2 << 20];
-static uint8_t* xz_arena_ptr;
+static uint8_t *xz_arena_ptr;
 
-void*
+void *
 xz_malloc_stub(size_t size)
 {
   uint8_t *next, *xz_arena_end, *ret;
@@ -50,19 +60,19 @@ xz_malloc_stub(size_t size)
     return NULL;
   }
   ret = xz_arena_ptr;
-  next = (uint8_t*)(((uintptr_t)xz_arena_ptr + size + 7) & -8);
+  next = (uint8_t *)(((uintptr_t)xz_arena_ptr + size + 7) & -8);
   xz_arena_ptr = next;
   printf(BOOT FUNC("xz_malloc_stub") "(%zu) -> %p\n", size, ret);
   return ret;
 }
 
 void
-xz_free_stub(void* p)
+xz_free_stub(void *p)
 {
   printf(BOOT FUNC("xz_free_stub") ERROR "(%p) called\n", p);
   return;
 }
-struct xz_dec* XZ;
+struct xz_dec *XZ;
 
 enum
 {
@@ -79,47 +89,85 @@ struct reloc
   size_t size;
 };
 static struct reloc reloc;
+static uintptr_t img_start, img_end;
 
-static uint8_t* feed;
+static uint8_t *feed;
 
 extern uint8_t __prog_start[];
 extern uint8_t __prog_end[];
 
-static const char* COMPRESS_NAMES[] = {
+static const char *COMPRESS_NAMES[] = {
   [COMPRESS_NONE] = "NONE",
   [COMPRESS_XZ] = "XZ",
 };
 
+static const char *IMAGE_FORMAT_NAMES[] = {
+  [IMAGE_FLAT_BINARY] = "BIN",
+  [IMAGE_ELF] = "ELF32",
+};
+
 bool
-platform_init_meta(meta_t* meta)
+platform_init_meta(meta_t *meta)
 {
-  uintptr_t img_start, img_end, prog_start, prog_end;
+  uintptr_t prog_start, prog_end;
   uintptr_t reloc_tgt_start, reloc_tgt_end, reloc_buf_start, reloc_buf_end;
   uintptr_t stub_start, stub_end;
   size_t reloc_size, stub_size;
 
-  printf(BOOT FUNC("platform_init_meta") "meta { .load_addr=%llx\n", meta->load_addr);
-  printf(BOOT FUNC("platform_init_meta") "       .wire_size=%" PRIx32 "\n", meta->wire_size);
-  printf(BOOT FUNC("platform_init_meta") "       .mem_size=%" PRIx32 "\n", meta->mem_size);
-  printf(BOOT FUNC("platform_init_meta") "       .mem_crc32=%" PRIx32 "\n", meta->mem_crc32);
-  if (meta->compress >= NUM_COMPRESS_TYPES)
-    return false;
-  printf(BOOT FUNC("platform_init_meta") "       .compress=%s }\n", COMPRESS_NAMES[meta->compress]);
+  uint64_t flat_binary_load_addr;
 
-  if (meta->load_addr >= DRAM_LIMIT) {
-    printf(BOOT FUNC("platform_init_meta") ERROR "load address outside of address space\n");
-    return false;
-  }
-  if (meta->load_addr + (uint64_t)meta->mem_size >= DRAM_LIMIT) {
-    printf(BOOT FUNC("platform_init_meta") ERROR "image size overflows address space\n");
-    return false;
-  }
-  memcpy(&META, meta, sizeof META);
-
-  img_start = (uintptr_t)meta->load_addr;
-  img_end = (uintptr_t)(meta->load_addr + meta->mem_size);
   prog_start = (uintptr_t)__prog_start;
   prog_end = (uintptr_t)__prog_end;
+
+  if (meta->compression_type >= NUM_COMPRESS_TYPES) {
+    printf(BOOT FUNC("platform_init_meta") ERROR "unknown compression type %u\n",
+           meta->compression_type);
+    return false;
+  }
+  if (meta->image_format >= NUM_IMAGE_FORMATS) {
+    printf(BOOT FUNC("platform_init_meta") ERROR "unknown image format %u\n", meta->image_format);
+    return false;
+  }
+
+  printf(BOOT FUNC("platform_init_meta") "image_format=%s\n",
+         IMAGE_FORMAT_NAMES[meta->image_format]);
+  printf(BOOT FUNC("platform_init_meta") "wire_size=%" PRIx32 "\n", meta->wire_size);
+  printf(BOOT FUNC("platform_init_meta") "mem_size=%" PRIx32 "\n", meta->mem_size);
+  printf(BOOT FUNC("platform_init_meta") "mem_crc32=%" PRIx32 "\n", meta->mem_crc32);
+  printf(BOOT FUNC("platform_init_meta") "compress=%s\n", COMPRESS_NAMES[meta->compression_type]);
+
+  switch (meta->image_format) {
+    case IMAGE_FLAT_BINARY:
+      flat_binary_load_addr = meta->format_metadata.flat_binary_metadata.load_addr;
+      if (flat_binary_load_addr >= DRAM_LIMIT) {
+        printf(BOOT FUNC("platform_init_meta") ERROR "load address outside of address space\n");
+        return false;
+      }
+      if (flat_binary_load_addr + (uint64_t)meta->mem_size >= DRAM_LIMIT) {
+        printf(BOOT FUNC("platform_init_meta") ERROR "image size overflows address space\n");
+        return false;
+      }
+      if ((flat_binary_load_addr & 3) != 0) {
+        printf(BOOT FUNC("platform_init_meta") ERROR "load address must be 4-byte aligned\n");
+        return false;
+      }
+      printf(BOOT FUNC("platform_init_meta") "BIN:load_addr=%llx\n", flat_binary_load_addr);
+
+      img_start = (uintptr_t)flat_binary_load_addr;
+      break;
+    case IMAGE_ELF:
+      // okay, this is more complicated. basically, we need to just pick a spot in memory to load
+      // the image; when image loading is done, parse the ELF and do a second-stage loading process
+      img_start = (uintptr_t)prog_end;
+      // img_start = 0x10000000;
+      break;
+    default:
+      printf(BOOT FUNC("platform_init_meta") "unknown image format: %d\n", meta->image_format);
+      return false;
+  }
+
+  img_end = img_start + (uintptr_t)meta->mem_size;
+  memcpy(&META, meta, sizeof META);
 
   printf(
     BOOT FUNC("platform_init_meta") "image = [%" PRIxPTR ",%" PRIxPTR ")\n", img_start, img_end);
@@ -134,8 +182,8 @@ platform_init_meta(meta_t* meta)
     (img_start >= prog_start && img_start < prog_end)
     //        | PROGRAM ------------ |
     //  | IMAGE -----? ------------------? |
-    || (img_start < prog_start && img_end > prog_start)) {
-
+    || (img_start < prog_start && img_end > prog_start))
+  {
     reloc_tgt_start = max(img_start, prog_start);
     reloc_tgt_end = min(img_end, prog_end);
     reloc_size = reloc_tgt_end - reloc_tgt_start;
@@ -166,12 +214,12 @@ platform_init_meta(meta_t* meta)
       stub_end);
 
     reloc = (struct reloc){
-      .tgt_start = (uint8_t*)reloc_tgt_start,
-      .tgt_end = (uint8_t*)reloc_tgt_end,
-      .buf_start = (uint8_t*)reloc_buf_start,
-      .buf_end = (uint8_t*)reloc_buf_end,
-      .stub_start = (uint8_t*)stub_start,
-      .stub_end = (uint8_t*)stub_end,
+      .tgt_start = (uint8_t *)reloc_tgt_start,
+      .tgt_end = (uint8_t *)reloc_tgt_end,
+      .buf_start = (uint8_t *)reloc_buf_start,
+      .buf_end = (uint8_t *)reloc_buf_end,
+      .stub_start = (uint8_t *)stub_start,
+      .stub_end = (uint8_t *)stub_end,
       .size = reloc_size,
     };
   } else {
@@ -194,13 +242,13 @@ platform_init_meta(meta_t* meta)
     return false;
   }
 
-  feed = (uint8_t*)(uintptr_t)META.load_addr;
+  feed = (uint8_t *)img_start;
 
   return true;
 }
 
 static void
-feed_impl(uint8_t* data, size_t len)
+feed_impl(uint8_t *data, size_t len)
 {
   size_t cnt, off;
 
@@ -234,7 +282,7 @@ feed_impl(uint8_t* data, size_t len)
 static uint8_t decompress_buffer[128 << 10];
 
 bool
-platform_feed(size_t chunk_no, uint8_t* data, size_t len)
+platform_feed(size_t chunk_no, uint8_t *data, size_t len)
 {
   struct xz_buf xzbuf;
   enum xz_ret r;
@@ -242,7 +290,7 @@ platform_feed(size_t chunk_no, uint8_t* data, size_t len)
 
   printf(BOOT "received chunk #%zu (%zuB)\n", chunk_no, len);
 
-  if (META.compress == COMPRESS_XZ) {
+  if (META.compression_type == COMPRESS_XZ) {
     xzbuf = (struct xz_buf){
       .in = data,
       .in_pos = 0,
@@ -302,7 +350,7 @@ enum
 };
 
 static uint32_t
-crc_with_heartbeat(uint32_t crc, uint8_t* data, uint8_t* until)
+crc_with_heartbeat(uint32_t crc, uint8_t *data, uint8_t *until)
 {
   size_t blocksz;
   while (data < until) {
@@ -314,16 +362,26 @@ crc_with_heartbeat(uint32_t crc, uint8_t* data, uint8_t* until)
   return crc;
 }
 
+extern bool
+load_elf_image(uintptr_t img_start,
+               uintptr_t img_end,
+               bool elf32_p,
+               bool elfle_p,
+               uint16_t machine,
+               uintptr_t mem_hi,
+               const char *cmdline);
+extern uintptr_t
+elf_trampoline();
+
 bool
 platform_load_image(void)
 {
   uint32_t crc;
   size_t cnt, off;
-  bool crc_ok;
+  bool crc_ok, format_ok;
+  uint8_t *end;
 
-  crc = CRC_INIT;
-
-  uint8_t* end = (uint8_t*)(uintptr_t)META.load_addr + META.mem_size;
+  end = (uint8_t *)img_start + META.mem_size;
 
   if (feed != end) {
     printf(BOOT FUNC("platform_load_image") ERROR "feed (%p) did not reach end of image (%p)\n",
@@ -332,17 +390,16 @@ platform_load_image(void)
     return false;
   }
 
-  switch (META.compress) {
+  // CRC checking
+  switch (META.compression_type) {
     case COMPRESS_NONE:
-      feed = (uint8_t*)(uintptr_t)META.load_addr;
+      crc = CRC_INIT;
+      feed = (uint8_t *)img_start;
 
       if (reloc.size) {
         if (feed < reloc.tgt_start && end > reloc.tgt_start) {
           cnt = reloc.tgt_start - feed;
-          printf(BOOT FUNC("platform_load_image") ""
-                                                  "CRC [%p,%p)\n",
-                 feed,
-                 feed + cnt);
+          printf(BOOT FUNC("platform_load_image") "CRC [%p,%p)\n", feed, feed + cnt);
           crc = crc_with_heartbeat(crc, feed, feed + cnt);
           feed += cnt;
         }
@@ -372,12 +429,25 @@ platform_load_image(void)
       crc_ok = true;
       break;
     default:
-      printf(BOOT FUNC("platform_load_image") ERROR "Unknown compression option %lu\n",
-             META.compress);
+      printf(BOOT FUNC("platform_load_image") ERROR "Unknown compression option %u\n",
+             META.compression_type);
       return false;
   }
 
-  if(crc_ok)
+  // Format-specific parsing
+  switch (META.image_format) {
+    case IMAGE_FLAT_BINARY:
+      format_ok = true;
+      break;
+    case IMAGE_ELF:
+      format_ok = load_elf_image(img_start, img_end, true, true, EM_ARM, 0x2000'0000, "");
+      break;
+    default:
+      printf(BOOT FUNC("platform_load_image") ERROR "Unknown image format %u\n", META.image_format);
+      return false;
+  }
+
+  if (crc_ok && format_ok)
     printf(BOOT FUNC("platform_load_image") "okay to boot\n");
 
   return crc_ok;
@@ -388,25 +458,42 @@ static void
 trampoline()
 {
   uint32_t branch_to;
+  switch(META.image_format) {
+    case IMAGE_FLAT_BINARY:
+      if (reloc.size) {
+        memcpy(reloc.stub_start, TRAMPOLINE_START, TRAMPOLINE_END - TRAMPOLINE_START);
+        branch_to = (uint32_t)reloc.stub_start;
+      } else {
+        branch_to = (uint32_t)TRAMPOLINE_START;
+      }
 
-  if (reloc.size) {
-    memcpy(reloc.stub_start, TRAMPOLINE_START, TRAMPOLINE_END - TRAMPOLINE_START);
-    branch_to = (uint32_t)reloc.stub_start;
-  } else {
-    branch_to = (uint32_t)TRAMPOLINE_START;
+      printf(BOOT "loaded trampoline, jumping\n");
+
+      aux_uart_flush_tx_fifo();
+
+      register uint32_t r0 asm("r0"), r1 asm("r1"), r2 asm("r2"), r3 asm("r3"), r4 asm("r4");
+      r0 = (uint32_t)reloc.tgt_start;
+      r1 = (uint32_t)reloc.buf_start;
+      r2 = (uint32_t)reloc.size;
+      r3 = (uint32_t)img_start;
+      r4 = branch_to;
+      __asm__ volatile("bx r4" : : "r"(r0), "r"(r1), "r"(r2), "r"(r3), "r"(r4));
+      __builtin_unreachable();
+
+    case IMAGE_ELF:
+      branch_to = elf_trampoline();
+
+      printf(BOOT "loaded trampoline at 0x%x, jumping\n", branch_to);
+
+      aux_uart_flush_tx_fifo();
+
+      __asm__ volatile("bx %0" : : "r"(branch_to));
+      __builtin_unreachable();
+
+    default:
+      panic(BOOT FUNC("trampoline") ERROR "Unknown image format %u\n", META.image_format);
   }
 
-  printf(BOOT "loaded trampoline, jumping\n");
-
-  aux_uart_flush_tx_fifo();
-
-  register uint32_t r0 asm("r0"), r1 asm("r1"), r2 asm("r2"), r3 asm("r3"), r4 asm("r4");
-  r0 = (uint32_t)reloc.tgt_start;
-  r1 = (uint32_t)reloc.buf_start;
-  r2 = (uint32_t)reloc.size;
-  r3 = META.load_addr;
-  r4 = branch_to;
-  __asm__ volatile("bx r4" : : "r"(r0), "r"(r1), "r"(r2), "r"(r3), "r"(r4));
   __builtin_unreachable();
 }
 
@@ -425,6 +512,8 @@ main(void)
   aux_uart_init(BAUD_RATE, 250'000'000);
 
   xz_crc32_init();
+
+  // printf(__FILE__ ": PDOWN started successfully!\n");
 
   fsm_download(&config);
 

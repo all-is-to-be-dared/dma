@@ -1,5 +1,5 @@
 #include <bcm2835/extra.h>
-#include <printf/printf.h>
+#include <generic/printf.h>
 #include <bcm2835/platform.h>
 
 void

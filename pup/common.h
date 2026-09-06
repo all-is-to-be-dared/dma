@@ -8,22 +8,51 @@
 #define FUNC(s) "\x1b[32m" s "\x1b[0m: "
 #define ERROR "\x1b[31mERROR\x1b[0m: "
 
+// TODO: add a way to send a command line to the booted program; probably can do this 
+
 // payload: meta_t
-enum compress_type : uint32_t {
+enum compression_type : uint32_t {
   COMPRESS_NONE,
   COMPRESS_XZ,
   NUM_COMPRESS_TYPES,
 };
-static_assert(sizeof(enum compress_type) == 4);
+static_assert(sizeof(enum compression_type) == 4);
+
+enum image_format : uint32_t
+{
+  IMAGE_FLAT_BINARY,
+  IMAGE_ELF,
+  NUM_IMAGE_FORMATS,
+};
+static_assert(sizeof(enum image_format) == 4);
+
 typedef struct
 {
   uint64_t load_addr;
+} flat_binary_meta_t;
+typedef struct {
+  // nothing: ELF contains all the info inside itself
+} elf32_meta_t;
+
+typedef struct
+{
+  enum image_format image_format;
+  enum compression_type compression_type;
+
   // number of bytes that will be sent over the wire
   uint32_t wire_size;
   // number of bytes that the final image occupies in memory
   uint32_t mem_size;
+  // CRC32 of (uncompressed) image
   uint32_t mem_crc32;
-  enum compress_type compress;
+
+  // XXX: at the end so that it can grow if needed without blowing up other parts of the logic
+  // TODO: add logic so that if meta_t.format_metadata grows in size, the wire format can still
+  //       accept it
+  union {
+    flat_binary_meta_t flat_binary_metadata;
+    elf32_meta_t elf32_metadata;
+  } format_metadata;
 } meta_t;
 #define HOST_POLL "POLL"
 #define HOST_CHNK "CHNK"

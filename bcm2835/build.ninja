@@ -8,10 +8,13 @@ build bcm2835/init.o: arm_cc bcm2835/init.c
 build bcm2835/pwrman.o: arm_cc bcm2835/pwrman.c
 build bcm2835/uart.o: arm_cc bcm2835/uart.c
 build bcm2835/gpio.o: arm_cc bcm2835/gpio.c
-build bcm2835/printf.o: arm_cc printf/printf.c
-  cflags_ext = -DPRINTF_DISABLE_SUPPORT_FLOAT=1
 build bcm2835/systmr.o: arm_cc bcm2835/systmr.c
 build bcm2835/ptags.o: arm_cc bcm2835/ptags.c
 build bcm2835/extra.o: arm_cc bcm2835/extra.c
+build bcm2835/printf.o: arm_cc printf/printf.c
+  cflags_ext = -DPRINTF_DISABLE_SUPPORT_FLOAT=1
+build bcm2835/ubsan.o: arm_cc generic/ubsan.c
 
 default bcm2835/libplatform.a
+
+build bcm2835/libsanrt.a: arm_mklib bcm2835/ubsan.o

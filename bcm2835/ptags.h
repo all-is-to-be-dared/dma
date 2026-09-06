@@ -14,5 +14,5 @@ ptag_get_arm_memory(void);
 struct ptag_mem_region
 ptag_get_vc_memory(void);
 
-uint32_t
+uint16_t
 ptag_get_dma_channel_mask(void);

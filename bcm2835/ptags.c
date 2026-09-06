@@ -1,12 +1,13 @@
 #include <stdint.h>
 #include <string.h>
+#include <inttypes.h>
 
 #include <bcm2835/platform.h>
 #include <bcm2835/extra.h>
 #include <bcm2835/ptags.h>
 #include <bcm2835/arch.h>
 
-#include <printf/printf.h>
+#include <generic/printf.h>
 
 enum mbox_buf_code
 {
@@ -178,7 +179,7 @@ ptag_get_vc_memory(void)
   return tag.payload;
 }
 
-uint32_t
+uint16_t
 ptag_get_dma_channel_mask(void)
 {
   struct
@@ -191,6 +192,8 @@ ptag_get_dma_channel_mask(void)
     panic("ptag_get_dma_channels: failed to query VC for usable DMA channels\n");
 
   assert(tag.hdr.code.is_response && tag.hdr.code.resp_size == 4);
+
+  assert((tag.payload & 0xffff0000) == 0, "ptag_get_dma_channel_mask: invalid channel mask %08"PRIx32"\n", tag.payload);
 
   return tag.payload;
 }

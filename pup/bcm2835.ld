@@ -6,6 +6,14 @@ __STACK_SIZE = 32K;
 ENTRY(_start)
 ASSERT(DEFINED(_start), "_start MUST be defined")
 
+/* by default, LD adds a headers segment or two which we DON'T want */
+PHDRS {
+  text PT_LOAD ;
+  rodata PT_LOAD ;
+  data PT_LOAD ;
+  stack PT_LOAD ;
+}
+
 SECTIONS {
   .text __LOAD_ADDR : {
     __prog_start = .;
@@ -14,17 +22,17 @@ SECTIONS {
     *(.text*)
     . = ALIGN(__WORD_ALIGN);
     __exec_end = .;
-  }
+  } :text
   .rodata : {
     . = ALIGN(__WORD_ALIGN);
     *(.rodata*)
     . = ALIGN(__WORD_ALIGN);
-  }
+  } : rodata
   .data : {
     . = ALIGN(__WORD_ALIGN);
     *(.data*)
     . = ALIGN(__WORD_ALIGN);
-  }
+  } : data
   .bss : {
     . = ALIGN(__WORD_ALIGN);
     __bss_start = .;
@@ -32,7 +40,7 @@ SECTIONS {
     *(COMMON)
     . = ALIGN(__WORD_ALIGN);
     __bss_end = .;
-  }
+  } : data
   .stack (TYPE=SHT_NOBITS) : {
     . = ALIGN(__STACK_ALIGN);
     __stack_start = .;
@@ -41,5 +49,5 @@ SECTIONS {
     __stack_init = .;
     __stack_end = .;
     __prog_end = .;
-  }
+  } : stack
 }

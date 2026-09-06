@@ -1,32 +1,77 @@
-# -------------------------------------------------------------------------------------------------
-# ANSI COLORS
-
-# Note: this is a raw escape character. Use `:show list` in Vim to see it.
-_ansi_esc = 
-_green = ${_ansi_esc}[32m
-_magenta = ${_ansi_esc}[35m
-_cyan = ${_ansi_esc}[36m
-_reset = ${_ansi_esc}[0m
+# This file contains the infrastructure used to compile for all the different architectures we
+# support. You may (or may not) need to edit this file to get things to compile.
+#
+# Look for the string "TASK :: " to navigate between parts of the file that need editing.
 
 
 
+# BUILD NOTE: This is currently built for a clang-based workflow! This is to simplify the build
+# process by running everything through one compiler.
+#
+# This requires:
+#  - clang (set by $cc)
+#  - ARM sysroot (set by $arm_cc_explicit)
+#
+#
+# It's also easy to reconfigure this to use GCC for cross-compilation:
+#  - compiler for individual targets can be overridden ($arm_cc, $host_cc)
+#  - individual targets have compiler-specific flags variables ($arm_cc_explicit, $host_cc_explicit)
+# Generally: look for sections of this file titled `# XYZ COMPILER CONFIGURATION`
 
-# -------------------------------------------------------------------------------------------------
-# ARMv6 COMPILER
 
-arm_toolchain = arm-none-eabi-
-arm_cflags    = -Wall -O2 -I. -ffreestanding -nostdlib -nostartfiles -std=gnu23 -march=armv6zk $
-                -mcpu=arm1176jzf-s -fdiagnostics-color $
-                --target=arm-none-eabi --gcc-install-dir=/usr/lib/gcc/arm-none-eabi/14.2.1/ $
-                -isystem /usr/lib/gcc/arm-none-eabi/14.2.1/include-fixed -isystem /usr/lib/arm-none-eabi/include $
-                --sysroot /usr/lib/arm-none-eabi/ -fshort-enums
-                # -fsanitize=undefined -fsanitize-minimal-runtime $
-                # -fno-omit-frame-pointer
+
+
+include util.ninja
+
+
+
+
+# --------------------------------------------------------------------------------------------------
+# GENERIC
+cc = clang-24
+ld = ld.lld-24
+objcopy = llvm-objcopy-24
+
+
+
+
+# --------------------------------------------------------------------------------------------------
+# ARMv6 COMPILER CONFIGURATION
+#
+# TASK :: Edit these in accordance with your system
+
+arm_cc = ${cc}
+arm_ld = ${ld}
+arm_objcopy = ${objcopy}
+# Compiler-specific flags.
+#
+# Example (Clang):
+#
+#     --target=arm-none-eabi --sysroot=/usr/lib/arm-none-eabi -fshort-enums
+#
+#   is required for clang on my machine, but --target isn't a GCC option and the other options would
+#   be superfluous
+# 
+# Example (GCC):
+#
+#     -nostartfiles
+# 
+arm_cc_explicit = --target=arm-none-eabi --sysroot /usr/lib/arm-none-eabi -fshort-enums
+
+
+
+
+# --------------------------------------------------------------------------------------------------
+# ARMv6 COMPILER RULES
+
+arm_cflags    = -Wall -O2 -I. -ffreestanding -nostdlib -std=gnu23 -march=armv6zk $
+                -mcpu=arm1176jzf-s -fdiagnostics-color ${arm_cc_explicit} $
+                -fomit-frame-pointer
 arm_ldflags    = -z noexecstack --gc-sections -static
 
+# params: cflags_ext
 rule arm_cc
-  # command = ${arm_toolchain}gcc -MD -MF ${out}.d ${arm_cflags} ${cflags_ext} -c ${in} -o ${out}
-  command = clang-22 -MD -MF ${out}.d ${arm_cflags} ${cflags_ext} -c ${in} -o ${out}
+  command = ${cc} -MD -MF ${out}.d ${arm_cflags} ${cflags_ext} -c ${in} -o ${out}
   deps = gcc
   depfile = ${out}.d
   description = ${_green}[ARM_CC]${_reset} ${out}
@@ -35,12 +80,13 @@ rule arm_mklib
   command = ${arm_toolchain}ar rcs ${out} ${in}
   description = ${_green}[ARMAR]${_reset} ${out}
 
+# params: ldflags_ext
 rule arm_link
-  command = ${arm_toolchain}ld ${arm_ldflags} ${ldflags_ext} ${in} ${libs} -o ${out}
+  command = ${arm_ld} ${arm_ldflags} ${ldflags_ext} ${in} ${libs} -o ${out}
   description = ${_green}[ARMLD]${_reset} ${out}
 
 rule arm_objcopy
-  command = ${arm_toolchain}objcopy -O binary ${in} ${out}
+  command = ${arm_objcopy} -O binary ${in} ${out}
   description = ${_green}[ARMOCP]${_reset} ${out}
 
 rule pi-install
@@ -58,11 +104,22 @@ rule arm_mergelibs
 
 
 
-# -------------------------------------------------------------------------------------------------
-# HOST COMPILER
+# --------------------------------------------------------------------------------------------------
+# HOST COMPILER CONFIGURATION
+#
+# TASK :: Edit these in accordance with your system
 
-host_cc = clang-22
-host_cflags = -std=c2y -O2 -I. -march=native
+host_cc = ${cc}
+host_ld = ${cc}
+host_cc_explicit = 
+
+
+
+
+# --------------------------------------------------------------------------------------------------
+# HOST COMPILER RULES
+
+host_cflags = -std=c2y -O2 -I. -march=native ${host_cc_explicit}
 host_ldflags =
 
 rule host_cc
@@ -72,13 +129,13 @@ rule host_cc
   description = ${_magenta}[HOSTCC]${_reset} ${out}
 
 rule host_link
-  command = ${host_cc} ${host_ldflags} ${ldflags_ext} ${in} ${libs} -o ${out}
+  command = ${host_ld} ${host_ldflags} ${ldflags_ext} ${in} ${libs} -o ${out}
   description = ${_magenta}[HOSTLD]${_reset} ${out}
 
 
 
 
-# -------------------------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------------------------
 # MISC. UTILITIES
 
 rule mkdir

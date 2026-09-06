@@ -1,0 +1,9 @@
+# --------------------------------------------------------------------------------------------------
+# ANSI COLORS
+
+# Note: this is a raw escape character. Use `:show list` in Vim to see it.
+_ansi_esc = 
+_green = ${_ansi_esc}[32m
+_magenta = ${_ansi_esc}[35m
+_cyan = ${_ansi_esc}[36m
+_reset = ${_ansi_esc}[0m

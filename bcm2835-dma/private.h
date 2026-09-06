@@ -77,7 +77,7 @@ bus_to_arm(busad bus)
     addr -= BUS_PERI_BASE;
     addr += ARM_PERI_BASE;
   } else {
-    panic("bus_to_arm: invalid address %lx\n", bus._0);
+    panic("bus_to_arm: invalid address %x\n", bus._0);
   }
   return addr;
 }

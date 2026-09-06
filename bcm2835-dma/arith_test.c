@@ -6,13 +6,14 @@
 #include <bcm2835/ptags.h>
 #include <bcm2835-dma/emit.h>
 #include <bcm2835-dma/arith.h>
-#include <printf/printf.h>
+#include <generic/printf.h>
 
 void
 main()
 {
   struct ptag_mem_region arm_mem, vc_mem;
-  uint32_t chanmask, i;
+  uint32_t i;
+  uint16_t chanmask;
 
   gpio_pin_set_function(14, FSEL_ALT5);
   gpio_pin_set_function(15, FSEL_ALT5);
@@ -50,15 +51,19 @@ main()
   assert(dmakit_channel_acquire(&rsv, false, "ArithTest")); // Reserve a channel and dump RSVs
   dmakit_dump_channel_reservations();
   printf("\n");
-  
-  run_initializers(); // run all the magic INITIALIZERs
 
-  static cblk blocks[1024];
+  uint32_t init_start = cycle_count_read(), init_end;
+  run_initializers(); // run all the magic INITIALIZERs
+  init_end = cycle_count_read();
+  printf("initializers ran in %dcy\n", init_end-init_start);
+
+  enum { BLOCK_CNT = 1024 };
+  static cblk blocks[BLOCK_CNT];
   cblk *start;
   emit_ctx ctx = {
     .base = blocks,
     .p = blocks,
-    .cap = sizeof blocks / sizeof *blocks
+    .cap = BLOCK_CNT
   };
   // static uint8_t alignas(0x4000) ARENA[0x4000];
   // arena arena = {
@@ -131,12 +136,8 @@ main()
     }
   }
 
-  // uint32_t f, s;
-  // asm volatile("mov %0, r11\n\tmov %1, r13":"=r"(f),"=r"(s));
-  // printf("(main1) fp=%p sp=%p\n", f, s);
-
   {
-    enum { A = 0x87654321, B = 1 };
+    enum { A = 0x87654321, B = 9 };
     volatile int32_t a, b, c;
     a = A;
     b = B;
@@ -144,7 +145,7 @@ main()
     start = Here(&ctx);
     Sra(&ctx, 4, bus(&c), bus(&a), bus(&b));
     End(&ctx);
-    // asm volatile("" :/*outputs*/ :/*inputs*/ :/*clobbers*/ "r11");
+    ReportProbeInfo();
 
     for(int i = 0;i < 4;i++) {
       c = 0;
@@ -152,10 +153,6 @@ main()
       printf("Timing 4-wide Sra... ");
       runinfo = dmakit_timed_run(rsv, start);
       printf("%dcy\n", runinfo.cycle_end);
-
-      // uint32_t f, s;
-      // asm volatile("mov %0, r11\n\tmov %1, r13":"=r"(f),"=r"(s));
-      // printf("(main2/4) fp=%p sp=%p\n", f, s);
 
       ReportProbeInfo();
       assert(a == A);

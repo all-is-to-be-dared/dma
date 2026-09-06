@@ -4,7 +4,7 @@
 #include <bcm2835/platform.h>
 #include <bcm2835/extra.h>
 #include <bcm2835/ptags.h>
-#include <printf/printf.h>
+#include <generic/printf.h>
 
 void
 main()
@@ -66,7 +66,7 @@ main()
     printf("Timing 4 byte copy... ");
     assert(a1[0] == 0);
     runinfo = dmakit_timed_run(rsv, &cb);
-    assert(a1[0] == 0x12345678, "post: a1[0] = %08lx\n", a1[0]);
+    assert(a1[0] == 0x12345678, "post: a1[0] = %08x\n", a1[0]);
     printf("%dcy\n", runinfo.cycle_end);
   }
 
@@ -113,7 +113,7 @@ main()
     for(int i = 0;i<SIZE;i++) {
       uint32_t exp = (i % 16 || (i/16) >= n ? 0: 0x12345678);
       if(a1[i] != exp)
-        printf("a1[%d] = %08lx expected %08lx", i, a1[i], exp);
+        printf("a1[%d] = %08x expected %08x", i, a1[i], exp);
     }
     printf("%dcy\n", runinfo.cycle_end);
   }

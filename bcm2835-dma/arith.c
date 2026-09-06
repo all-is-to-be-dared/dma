@@ -6,7 +6,7 @@
 #include <bcm2835-dma/emit.h>
 #include <bcm2835-dma/arith.h>
 
-#include <printf/printf.h>
+#include <generic/printf.h>
 
 
 
@@ -372,6 +372,7 @@ Srl(emit_ctx* c, size_t width, busad ret, busad inp, busad shf8)
   tmp = MonomorphizeOn(width, ({ arena_alloc(&ARENA, 2 * width, 256); }));
 
 
+  // TODO: can I drop this line?
   Emit(c, bus(tmp), bus(ZERO), width);
   Srl8(c, width, bus_(tmp, 0), inp, shf8);
 
@@ -392,7 +393,7 @@ Srl(emit_ctx* c, size_t width, busad ret, busad inp, busad shf8)
 #define _TableSymbol [[gnu::section(".dma.tables"), gnu::used]]
 
 _TableSymbol static volatile uint8_t alignas(1<<8) SEXT_WHICH[1<<8];
-_TableSymbol static volatile uint8_t alignas(1<<5) SEXT_BUFS[32];
+_TableSymbol static volatile uint8_t alignas(1<<5) SEXT_BUFS[1<<5];
 
 INITIALIZER(init_sext)
 {
@@ -429,10 +430,10 @@ Sra8(emit_ctx *c, size_t width, busad ret, busad inp, busad shf8)
   
   $0 = Label(c);
 
-  EmitStrided(c, bus_rel_fld($0,+5,FLD_SRC,1), inp, width-1, 2, 30, -1);
+  EmitStrided(c, bus_rel_fld($0,+5,FLD_SRC,1), inp,width-1, 2, 30, -1);
   EmitStridedWith(c, TI_DST_INC|TI_2DMODE, bus_rel_fld($0,+2,FLD_SRC,0), shf8, 2, 1, 63, 0);
   EmitStridedWith(c, TI_DST_INC|TI_2DMODE, bus_rel_fld($0,+5,FLD_SRC,0), bus(SRL_SUPER_SELECT),
-                  width,1,31,0);
+                  width-1,1,31,0); // +2
 
   Emit(c, bus_rel_fld($0,+4,FLD_SRC,1), bus_add(inp,width-1), 1);
   Emit(c, bus_add(ret,width-1), bus(SRA_HI), 1);
@@ -445,15 +446,12 @@ uint32_t sp_save = 0;
 void
 Sra(emit_ctx *c, size_t width, busad ret, busad inp, busad shf8)
 {
-  // uint32_t f, s;
-  // asm volatile("mov %0, r11\n\tmov %1, r13":"=r"(f),"=r"(s));
-  // printf("(Sra1) fp=%p sp=%p\n", f, s);
-  
   busad $0, $1;
   uint8_t *SRA_SHIFT_SELECT, *tmp;
 
-  assert(width < 128);
-  assert(width < 16, ".. due to the size of SEXT_BUFS");
+  assert(width < 128, "due to monotable alignment, etc.");
+  // TODO: This MAY have a bug where width>16 breaks it (see: $0+2)
+  
   // actually the same as SRL_SHIFT SELECT; should merge the two
   SRA_SHIFT_SELECT = MonomorphizeOn(width, ({
                                       uint8_t *t = arena_alloc(&ARENA, 256, 256);
@@ -464,28 +462,16 @@ Sra(emit_ctx *c, size_t width, busad ret, busad inp, busad shf8)
   // should merge with SLL/SRL
   tmp = MonomorphizeOn(width, ({ arena_alloc(&ARENA, 2 * width, 256); }));
 
-  // Probe("tmp", tmp, width*2);
-
   $0 = Label(c);
   // TODO: check if it's faster to do this in 2dmode
-  Emit(c, bus_rel_fld($0,+1,FLD_SRC,0), shf8, 1);
+  Emit(c, bus_rel_fld($0,+1,FLD_SRC,0), bus_add(inp,width-1), 1);
   Emit(c, bus_rel_fld($0,+2,FLD_SRC,0), bus(SEXT_WHICH), 1);
   EmitWith(c, TI_DST_INC, bus_(tmp, width), bus(SEXT_BUFS), width);
 
-  Sra8(c, width, bus_(tmp, 0), inp, shf8);
-  // Sra8(c, width, ret, inp, shf8);
+  Sra8(c, width, bus(tmp), inp, shf8);
   
   $1 = Label(c);
   Emit(c, bus_rel_fld($1, +1, FLD_SRC, 0), shf8, 1);
   Emit(c, bus_rel_fld($1, +2, FLD_SRC, 0), bus(SRA_SHIFT_SELECT), 1);
-  // // Probe("Sra.sra_shift_select!", &Last(c)->src_addr, 4);
   Emit(c, ret, bus(tmp), width);
-  // // Probe("tmp_select!", &Last(c)->src_addr, 4);
-
-  // aux_uart_can_read();
-  // uint32_t sp;
-  // asm volatile("mov %0, r13":"=r"(sp));
-  // asm volatile("" :/*outputs*/ :/*inputs*/ :/*clobbers*/"sp");
-  // sp_save = sp;
-  // printf("r13=%p\n", sp);
 }

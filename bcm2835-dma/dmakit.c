@@ -6,18 +6,19 @@
 #include <bcm2835/ptags.h>
 #include <bcm2835/arch.h>
 #include <generic/bits.h>
-#include <printf/printf.h>
+#include <generic/printf.h>
 
 
 
 
-const char* channel_reservations[16] = {};
+const char* channel_reservations[DMA_CHAN_COUNT] = {};
 static bool did_init_reservations = false;
 
 void
 dmakit_init_channels(void)
 {
-  uint32_t chan_mask, i;
+  int i;
+  uint16_t chan_mask;
 
   assert(!did_init_reservations);
   did_init_reservations = true;

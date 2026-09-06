@@ -1,7 +1,7 @@
 #include <bcm2835-dma/private.h>
 #include <string.h>
 
-#include <printf/printf.h>
+#include <generic/printf.h>
 
 void
 run_initializers(void)
@@ -145,7 +145,7 @@ _Probe(const char* func, const char* name, volatile void* data, size_t width)
   if (probecnt >= PROBE_MAX)
     panic("no more probe slots to allocate (%zu>%d)\n", probecnt, PROBE_MAX);
 
-  printf("Attaching probe #%ld: %s:%s to %p:+%zu\n", probecnt, func, name, data, width);
+  printf("Attaching probe #%zu: %s:%s to %p:<%zu>\n", probecnt, func, name, data, width);
 
   probes[probecnt++] = (struct probe){ func, name, data, width };
 }
@@ -162,7 +162,7 @@ ReportProbeInfo(void)
   printf("Probe count: %d\n", probecnt);
   for (i = 0; i < probecnt; i++) {
     p = probes + i;
-    printf("%s:%s (%p:+%zu): ", p->func, p->name, p->data, p->size);
+    printf("%s:%s (%p:<%zu>): ", p->func, p->name, p->data, p->size);
     for (j = 0; j < p->size; j++) {
       printf("%02hhx", *(volatile uint8_t*)(p->data + p->size - 1 - j));
     }

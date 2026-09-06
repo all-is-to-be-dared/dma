@@ -3,7 +3,7 @@
 #include <bcm2835/extra.h>
 #include <bcm2835/arch.h>
 #include <generic/bits.h>
-#include <printf/printf.h>
+#include <generic/printf.h>
 
 struct dma_run_info
 __dma_timed_run(hw_dmachan_t* chan, cblk* init_blk)

@@ -8,6 +8,7 @@
 // BAUD_RATE = 1562500,
 // BAUD_RATE = 1152000,
 // BAUD_RATE = 1500000,
+// #define BAUD_RATE 115200
 
 
 
