@@ -69,12 +69,12 @@ claim_space(range r, bool force)
 
   for (i = 0; i < range_count; i++) {
     if (r.start < memory_map[i].start) {
-      memmove(memory_map + i + 1, memory_map + i, sizeof(range) * range_count - i);
+      memmove(memory_map + i + 1, memory_map + i, sizeof(range) * (range_count - i));
       memory_map[i] = r;
       return true;
     }
   }
-  memory_map[range_count] = r;
+  memory_map[range_count-1] = r;
   return true;
 }
 static uintptr_t
@@ -83,18 +83,20 @@ allocate_space(size_t size, range allowed, bool force)
   uintptr_t p;
   size_t i;
 
+  assert(size);
+
   p = allowed.start;
   for (i = 0; i < range_count; i++) {
     // if allowed.start>0, then we need to skip forward in the memory map, otherwise the search will
     // short circuit and misbehave
-    if (p >= memory_map[i].start)
+    if (p > memory_map[i].start)
       continue;
     // if p goes to far, quit
     if (p + size > allowed.end)
       return UINTPTR_MAX;
 
-    // correct as long as p<start, which is ensured above
-    if (memory_map[i].start - p >= size)
+    // correct as long as p<=start, which is ensured above
+    if ((memory_map[i].start - p) >= size)
       goto success;
     else
       p = memory_map[i].end;
@@ -102,13 +104,16 @@ allocate_space(size_t size, range allowed, bool force)
 
   // it's possible that even if there are no gaps among registered ranges, there still exists space
   // up in the high end of the allowed range
-  if (allowed.end - p >= size)
+  if ((allowed.end - p) >= size)
     goto success;
 
   return UINTPTR_MAX;
 
 success:
-  claim_space((range){ p, p + size }, force);
+
+  if(!claim_space((range){ p, p + size }, force))
+    return UINTPTR_MAX;
+
   return p;
 }
 
@@ -236,7 +241,8 @@ load_elf_image(uintptr_t img_start,
   memcpy((void*)boot_alloc, ELF_TRAMPOLINE_START, ELF_TRAMPOLINE_END - ELF_TRAMPOLINE_START);
   elf_trampoline_ptr = boot_alloc;
 
-  params = boot_alloc + (struct elf_trampoline_params *)(ELF_TRAMPOLINE_PARAMS - ELF_TRAMPOLINE_START);
+  params = (struct elf_trampoline_params *)(boot_alloc + ELF_TRAMPOLINE_PARAMS - ELF_TRAMPOLINE_START);
+  // printf(BOOT FUNC("load_elf_image") "located parameter block at: %p\n", params);
 
   memcpy(params->loader_ops, loader_ops, sizeof loader_ops);
   params->loader_op_count = op_count;
