@@ -1,3 +1,5 @@
+#pragma once
+
 // -------------------------------------------------------------------------------------------------
 // UBSAN CORE
 
@@ -12,21 +14,21 @@ typedef struct
   const char *filename;
   uint32_t line;
   uint32_t col;
-} RTABI_SourceLocation;
+} SourceLocation;
 static inline bool
-sl_is_invalid(RTABI_SourceLocation *sl)
+sl_is_invalid(SourceLocation *sl)
 {
   return !sl->filename;
 }
-bool
-sl_is_disabled(RTABI_SourceLocation *sl)
+static inline bool
+sl_is_disabled(SourceLocation *sl)
 {
   return sl->col == (uint32_t)-1;
 }
 
 // -------------------------------------------------------------------------------------------------
 // Value handles
-typedef uintptr_t RTABI_ValueHandle;
+typedef uintptr_t ValueHandle;
 
 // -------------------------------------------------------------------------------------------------
 // Type descriptors
@@ -59,36 +61,36 @@ typedef struct
   enum type_kind type_kind;
   uint16_t type_info;
   char type_name[1];
-} RTABI_TypeDescriptor;
+} TypeDescriptor;
 static inline bool
-td_is_int(RTABI_TypeDescriptor *td)
+td_is_int(const TypeDescriptor *td)
 {
   return td->type_kind == TK_Integer || td->type_kind == TK_BitInt;
 }
 
 static inline bool
-td_is_bitint(RTABI_TypeDescriptor *td)
+td_is_bitint(const TypeDescriptor *td)
 {
   return td->type_kind == TK_BitInt;
 }
 
-bool
-td_is_sbitint(RTABI_TypeDescriptor *td)
+static inline bool
+td_is_sbitint(const TypeDescriptor *td)
 {
   return td_is_bitint(td) && (bool)(td->type_info & 1);
 }
-bool
-td_is_sint(RTABI_TypeDescriptor *td)
+static inline bool
+td_is_sint(const TypeDescriptor *td)
 {
-  return td_is_bitint(td) && (bool)(td->type_info & 1);
+  return td_is_int(td) && (bool)(td->type_info & 1);
 }
-bool
-td_is_uint(RTABI_TypeDescriptor *td)
+static inline bool
+td_is_uint(const TypeDescriptor *td)
 {
   return td_is_int(td) && !(td->type_info & 1);
 }
-uint32_t
-td_get_bit_width(RTABI_TypeDescriptor *td)
+static inline uint32_t
+td_get_bit_width(const TypeDescriptor *td)
 {
   uint32_t r;
   if (td_is_sbitint(td)) {
@@ -100,6 +102,11 @@ td_get_bit_width(RTABI_TypeDescriptor *td)
     r = 1 << (td->type_info >> 1);
   }
   return r;
+}
+static inline bool
+td_is_float(const TypeDescriptor *td)
+{
+  return td->type_kind == TK_Float;
 }
 
 #define SANITIZER_INTERFACE_ATTRIBUTE [[gnu::visibility("default")]]
@@ -153,123 +160,123 @@ enum type_check_kind : uint8_t
 };
 typedef struct
 {
-  RTABI_SourceLocation loc;
-  const RTABI_TypeDescriptor *ty;
+  SourceLocation loc;
+  const TypeDescriptor *ty;
   unsigned char log_alignment;
   enum type_check_kind type_check_kind;
-} RTABI_TypeMismatchData;
+} TypeMismatchData;
 
 /// \brief Handle a runtime type check failure, caused by either a misaligned
 /// pointer, a null pointer, or a pointer to insufficient storage for the
 /// type.
-RECOVERABLE(type_mismatch_v1, RTABI_TypeMismatchData *Data, RTABI_ValueHandle Pointer);
+RECOVERABLE(type_mismatch_v1, TypeMismatchData *Data, ValueHandle Pointer);
 
 typedef struct
 {
-  RTABI_SourceLocation loc;
-  RTABI_SourceLocation assumption_loc;
-  const RTABI_TypeDescriptor *ty;
-} RTABI_AlignmentAssumptionData;
+  SourceLocation loc;
+  SourceLocation assumption_loc;
+  const TypeDescriptor *ty;
+} AlignmentAssumptionData;
 
 /// \brief Handle a runtime alignment assumption check failure,
 /// caused by a misaligned pointer.
 RECOVERABLE(alignment_assumption,
-            RTABI_AlignmentAssumptionData *Data,
-            RTABI_ValueHandle Pointer,
-            RTABI_ValueHandle Alignment,
-            RTABI_ValueHandle Offset);
+            AlignmentAssumptionData *Data,
+            ValueHandle Pointer,
+            ValueHandle Alignment,
+            ValueHandle Offset);
 
 typedef struct
 {
-  RTABI_SourceLocation loc;
-  const RTABI_TypeDescriptor *ty;
-} RTABI_OverflowData;
+  SourceLocation loc;
+  const TypeDescriptor *ty;
+} OverflowData;
 
 /// \brief Handle an integer addition overflow.
-RECOVERABLE(add_overflow, RTABI_OverflowData *Data, RTABI_ValueHandle LHS, RTABI_ValueHandle RHS);
+RECOVERABLE(add_overflow, OverflowData *Data, ValueHandle LHS, ValueHandle RHS);
 
 /// \brief Handle an integer subtraction overflow.
-RECOVERABLE(sub_overflow, RTABI_OverflowData *Data, RTABI_ValueHandle LHS, RTABI_ValueHandle RHS);
+RECOVERABLE(sub_overflow, OverflowData *Data, ValueHandle LHS, ValueHandle RHS);
 
 /// \brief Handle an integer multiplication overflow.
-RECOVERABLE(mul_overflow, RTABI_OverflowData *Data, RTABI_ValueHandle LHS, RTABI_ValueHandle RHS);
+RECOVERABLE(mul_overflow, OverflowData *Data, ValueHandle LHS, ValueHandle RHS);
 
 /// \brief Handle a signed integer overflow for a unary negate operator.
-RECOVERABLE(negate_overflow, RTABI_OverflowData *Data, RTABI_ValueHandle OldVal);
+RECOVERABLE(negate_overflow, OverflowData *Data, ValueHandle OldVal);
 
 /// \brief Handle an INT_MIN/-1 overflow or division by zero.
 RECOVERABLE(divrem_overflow,
-            RTABI_OverflowData *Data,
-            RTABI_ValueHandle LHS,
-            RTABI_ValueHandle RHS);
+            OverflowData *Data,
+            ValueHandle LHS,
+            ValueHandle RHS);
 
 typedef struct
 {
-  RTABI_SourceLocation loc;
-  const RTABI_TypeDescriptor *lhs_ty, *rhs_ty;
-} RTABI_ShiftOutOfBoundsData;
+  SourceLocation loc;
+  const TypeDescriptor *lhs_ty, *rhs_ty;
+} ShiftOutOfBoundsData;
 
 /// \brief Handle a shift where the RHS is out of bounds or a left shift where
 /// the LHS is negative or overflows.
 RECOVERABLE(shift_out_of_bounds,
-            RTABI_ShiftOutOfBoundsData *Data,
-            RTABI_ValueHandle LHS,
-            RTABI_ValueHandle RHS);
+            ShiftOutOfBoundsData *Data,
+            ValueHandle LHS,
+            ValueHandle RHS);
 
 typedef struct
 {
-  RTABI_SourceLocation loc;
-  const RTABI_TypeDescriptor *arr_ty, *idx_ty;
-} RTABI_OutOfBoundsData;
+  SourceLocation loc;
+  const TypeDescriptor *arr_ty, *idx_ty;
+} OutOfBoundsData;
 
 /// \brief Handle an array index out of bounds error.
-RECOVERABLE(out_of_bounds, RTABI_OutOfBoundsData *Data, RTABI_ValueHandle Index);
+RECOVERABLE(out_of_bounds, OutOfBoundsData *Data, ValueHandle Index);
 
 /// \brief Handle an local object access out of bounds error.
 RECOVERABLE(local_out_of_bounds);
 
 typedef struct
 {
-  RTABI_SourceLocation loc;
-} RTABI_UnreachableData;
+  SourceLocation loc;
+} UnreachableData;
 
 /// \brief Handle a __builtin_unreachable which is reached.
-UNRECOVERABLE(builtin_unreachable, RTABI_UnreachableData *Data);
+UNRECOVERABLE(builtin_unreachable, UnreachableData *Data);
 /// \brief Handle reaching the end of a value-returning function.
-UNRECOVERABLE(missing_return, RTABI_UnreachableData *Data);
+UNRECOVERABLE(missing_return, UnreachableData *Data);
 
 typedef struct
 {
-  RTABI_SourceLocation loc;
-  const RTABI_TypeDescriptor *ty;
-} RTABI_VLABoundData;
+  SourceLocation loc;
+  const TypeDescriptor *ty;
+} VLABoundData;
 
 /// \brief Handle a VLA with a non-positive bound.
-RECOVERABLE(vla_bound_not_positive, RTABI_VLABoundData *Data, RTABI_ValueHandle Bound);
+RECOVERABLE(vla_bound_not_positive, VLABoundData *Data, ValueHandle Bound);
 
 typedef struct
 {
-  const RTABI_TypeDescriptor *from_ty, *to_ty;
-} RTABI_FloatCastOverflowData;
+  const TypeDescriptor *from_ty, *to_ty;
+} FloatCastOverflowData;
 
 typedef struct
 {
-  RTABI_SourceLocation loc;
-  const RTABI_TypeDescriptor *from_ty, *to_ty;
-} RTABI_FloatCastOverflowDataV2;
+  SourceLocation loc;
+  const TypeDescriptor *from_ty, *to_ty;
+} FloatCastOverflowDataV2;
 
 /// Handle overflow in a conversion to or from a floating-point type.
 /// void *Data is one of FloatCastOverflowData* or FloatCastOverflowDataV2*
-RECOVERABLE(float_cast_overflow, void *Data, RTABI_ValueHandle From);
+RECOVERABLE(float_cast_overflow, void *Data, ValueHandle From);
 
 typedef struct
 {
-  RTABI_SourceLocation loc;
-  const RTABI_TypeDescriptor *ty;
-} RTABI_InvalidValueData;
+  SourceLocation loc;
+  const TypeDescriptor *ty;
+} InvalidValueData;
 
 /// \brief Handle a load of an invalid value for the type.
-RECOVERABLE(load_invalid_value, RTABI_InvalidValueData *Data, RTABI_ValueHandle Val);
+RECOVERABLE(load_invalid_value, InvalidValueData *Data, ValueHandle Val);
 
 enum implicit_conversion_check_kind : uint8_t
 {
@@ -281,17 +288,17 @@ enum implicit_conversion_check_kind : uint8_t
 };
 typedef struct
 {
-  RTABI_SourceLocation loc;
-  RTABI_TypeDescriptor *from_ty, *to_ty;
+  SourceLocation loc;
+  TypeDescriptor *from_ty, *to_ty;
   enum implicit_conversion_check_kind kind;
   uint32_t bitfield_bits;
-} RTABI_ImplicitConversionData;
+} ImplicitConversionData;
 
-/// \brief Implict conversion that changed the value.
+/// \brief Implicit conversion that changed the value.
 RECOVERABLE(implicit_conversion,
-            RTABI_ImplicitConversionData *Data,
-            RTABI_ValueHandle Src,
-            RTABI_ValueHandle Dst);
+            ImplicitConversionData *Data,
+            ValueHandle Src,
+            ValueHandle Dst);
 
 enum builtin_check_kind : uint8_t
 {
@@ -301,53 +308,53 @@ enum builtin_check_kind : uint8_t
 };
 typedef struct
 {
-  RTABI_SourceLocation loc;
+  SourceLocation loc;
   enum builtin_check_kind kind;
-} RTABI_InvalidBuiltinData;
+} InvalidBuiltinData;
 
 /// Handle a builtin called in an invalid way.
-RECOVERABLE(invalid_builtin, RTABI_InvalidBuiltinData *Data);
+RECOVERABLE(invalid_builtin, InvalidBuiltinData *Data);
 
 // LACUNA: InvalidObjCCast / RECOVERABLE(invalid_objc_cast)
 
 typedef struct
 {
-  RTABI_SourceLocation loc;
-} RTABI_NonNullReturnData;
+  SourceLocation loc;
+} NonNullReturnData;
 
 /// \brief Handle returning null from function with the returns_nonnull
 /// attribute, or a return type annotated with _Nonnull.
-RECOVERABLE(nonnull_return_v1, RTABI_NonNullReturnData *Data, RTABI_SourceLocation *Loc);
-RECOVERABLE(nullability_return_v1, RTABI_NonNullReturnData *Data, RTABI_SourceLocation *Loc);
+RECOVERABLE(nonnull_return_v1, NonNullReturnData *Data, SourceLocation *Loc);
+RECOVERABLE(nullability_return_v1, NonNullReturnData *Data, SourceLocation *Loc);
 
 typedef struct
 {
-  RTABI_SourceLocation loc, attr_loc;
+  SourceLocation loc, attr_loc;
   int32_t arg_idx;
-} RTABI_NonNullArgData;
+} NonNullArgData;
 
 /// \brief Handle passing null pointer to a function parameter with the nonnull
 /// attribute, or a _Nonnull type annotation.
-RECOVERABLE(nonnull_arg, RTABI_NonNullArgData *Data);
-RECOVERABLE(nullability_arg, RTABI_NonNullArgData *Data);
+RECOVERABLE(nonnull_arg, NonNullArgData *Data);
+RECOVERABLE(nullability_arg, NonNullArgData *Data);
 
 typedef struct
 {
-  RTABI_SourceLocation loc;
-} RTABI_PointerOverflowData;
+  SourceLocation loc;
+} PointerOverflowData;
 
 RECOVERABLE(pointer_overflow,
-            RTABI_PointerOverflowData *Data,
-            RTABI_ValueHandle Base,
-            RTABI_ValueHandle Result);
+            PointerOverflowData *Data,
+            ValueHandle Base,
+            ValueHandle Result);
 
 // LACUNA: CFITypeCheckKind / CFICheckFailData / cfi_check_fail
 
 typedef struct
 {
-  RTABI_SourceLocation loc;
-  const RTABI_TypeDescriptor *ty;
-} RTABI_FunctionTypeMismatchData;
+  SourceLocation loc;
+  const TypeDescriptor *ty;
+} FunctionTypeMismatchData;
 
 // XXX: Not sure why by ubsan_handlers.h does this instead of using a RECOVERABLE()
 //
@@ -358,7 +365,12 @@ typedef struct
 // just use a normal RECOVERABLE().
 
 SANITIZER_INTERFACE_ATTRIBUTE void
-__ubsan_handle_function_type_mismatch(RTABI_FunctionTypeMismatchData *Data, RTABI_ValueHandle Val);
+__ubsan_handle_function_type_mismatch(FunctionTypeMismatchData *Data, ValueHandle Val);
 SANITIZER_INTERFACE_ATTRIBUTE void
-__ubsan_handle_function_type_mismatch_abort(RTABI_FunctionTypeMismatchData *Data,
-                                            RTABI_ValueHandle Val);
+__ubsan_handle_function_type_mismatch_abort(FunctionTypeMismatchData *Data,
+                                            ValueHandle Val);
+
+
+
+
+uint32_t ubsan_report_count(void);

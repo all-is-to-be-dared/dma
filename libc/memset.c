@@ -30,7 +30,9 @@ QUICKREF
 #include "local.h"
 
 void *
+#ifndef __clang__
 __inhibit_loop_to_libcall
+#endif
 memset (void *m,
 	int c,
 	size_t n)

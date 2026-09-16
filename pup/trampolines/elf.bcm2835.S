@@ -50,7 +50,8 @@ ELF_TRAMPOLINE_START:
 #define __aeabi_memset __elf_trampoline__aeabi_memset
 #define __aeabi_memmove __elf_trampoline__aeabi_memmove
 
-@# __aeabi_memset: void *dst, int c, size_t sz
+@# __aeabi_memset: void *dst, size_t sz, int c
+@# CRITICAL: THIS IS A DIFFERENT ORDER FROM THE USUAL `memset`
 #include "libc/newlib-arm/aeabi_memset-arm.S"
 @# __aeabi_memmove: void *dst, void *src, size_t sz
 #include "libc/newlib-arm/aeabi_memmove-arm.S"
@@ -58,65 +59,65 @@ ELF_TRAMPOLINE_START:
 @ Unfortunately, newlib'c memcpy for armv6 is defined in C, so we have to make our own here:
 @# memcpy: void *dst, void *src, size_t sz
 @# assumption: (src&3)==(dst&3)
-memcpy:
-    @ if sz == 0, return
-    tst r2, r2
-    beq memcpy.done
-
-    @ if sz<16, bytecopy
-    cmp r2, #16
-    blt memcpy.x1
-
-    @ if (src&3)!=(dst&3), bytecopy
-    lsl r4, r1, #29
-    teq r4, r0, lsl #29
-    bne memcpy.x1
-
-    @ otherwise, align to 4 and start schmovin'
-memcpy.pre1:
-    tst r0, #3
-    beq memcpy.x16
-    ldrb r4, [r1], #1
-    strb r4, [r1], #1
-    sub r2, r2, #1
-    b memcpy.pre1
-
-    @ word x4 copier
-memcpy.x16:
-    lsrs r3, r2, #4
-    beq memcpy.x4
-
-memcpy.x16.2:
-    ldmia r1!, {r4-r7}
-    stmia r0!, {r4-r7}
-    subs r3, r3, #1
-    bne memcpy.x16.2
-
-    subs r2, r3, lsl #4
-
-    @ word x1 copier
-memcpy.x4:
-    lsrs r3, r2, #2
-    beq memcpy.x1
-
-memcpy.x4.2:
-    ldr r4, [r1], #4
-    str r4, [r0], #4
-    subs r3, r3, #1
-    bne memcpy.x4.2
-
-    subs r2, r3, lsl #2
-
-    @ byte copier    
-memcpy.x1:
-    ldrb r4, [r1], #1
-    strb r4, [r0], #1
-    subs r2, r2, #1
-    bne memcpy.x1
-
-    @ epilogue
-memcpy.done:
-    bx lr
+@memcpy:
+@    @ if sz == 0, return
+@    tst r2, r2
+@    beq memcpy.done
+@
+@    @ if sz<16, bytecopy
+@    cmp r2, #16
+@    blt memcpy.x1
+@
+@    @ if (src&3)!=(dst&3), bytecopy
+@    lsl r4, r1, #29
+@    teq r4, r0, lsl #29
+@    bne memcpy.x1
+@
+@    @ otherwise, align to 4 and start schmovin'
+@memcpy.pre1:
+@    tst r0, #3
+@    beq memcpy.x16
+@    ldrb r4, [r1], #1
+@    strb r4, [r1], #1
+@    sub r2, r2, #1
+@    b memcpy.pre1
+@
+@    @ word x4 copier
+@memcpy.x16:
+@    lsrs r3, r2, #4
+@    beq memcpy.x4
+@
+@memcpy.x16.2:
+@    ldmia r1!, {r4-r7}
+@    stmia r0!, {r4-r7}
+@    subs r3, r3, #1
+@    bne memcpy.x16.2
+@
+@    subs r2, r3, lsl #4
+@
+@    @ word x1 copier
+@memcpy.x4:
+@    lsrs r3, r2, #2
+@    beq memcpy.x1
+@
+@memcpy.x4.2:
+@    ldr r4, [r1], #4
+@    str r4, [r0], #4
+@    subs r3, r3, #1
+@    bne memcpy.x4.2
+@
+@    subs r2, r3, lsl #2
+@
+@    @ byte copier    
+@memcpy.x1:
+@    ldrb r4, [r1], #1
+@    strb r4, [r0], #1
+@    subs r2, r2, #1
+@    bne memcpy.x1
+@
+@    @ epilogue
+@memcpy.done:
+@    bx lr
 
 @ Having a printf equivalent is really tremendously useful
 @# printx: const char *s, ...
@@ -393,6 +394,7 @@ op_loop.zero:
     # PRINTX("TRAMPOLINE: zerofilled %2 bytes at %0\n", r1, r2, r3)
     
     ldmia r8!, {r0-r2}
+    
     bl __aeabi_memset
 
     add r9, r9, #1

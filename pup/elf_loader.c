@@ -74,7 +74,7 @@ claim_space(range r, bool force)
       return true;
     }
   }
-  memory_map[range_count-1] = r;
+  memory_map[range_count - 1] = r;
   return true;
 }
 static uintptr_t
@@ -111,7 +111,7 @@ allocate_space(size_t size, range allowed, bool force)
 
 success:
 
-  if(!claim_space((range){ p, p + size }, force))
+  if (!claim_space((range){ p, p + size }, force))
     return UINTPTR_MAX;
 
   return p;
@@ -125,8 +125,19 @@ register_loader_op(enum elf_loader_op_kind kind, uintptr_t dst, uintptr_t src, s
   if (op_count >= ELF_MAX_SEGMENTS)
     return false;
 
-  loader_ops[op_count++] =
-    (struct elf_loader_op){ .kind = kind, .dst = dst, .src = src, .size = size };
+  if (kind == OP_COPY) {
+    loader_ops[op_count++] = (struct elf_loader_op){
+      .kind = OP_COPY, .copy.dst = dst, .copy.src = src, .copy.size = size
+    };
+  } else if (kind == OP_ZERO) {
+    loader_ops[op_count++] = (struct elf_loader_op){
+      .kind = OP_ZERO, .fill.dst = dst, .fill.size = size, .fill.fill = src & 0xff
+    };
+  } else {
+    printf(BOOT FUNC("register_loader_op") ERROR "invalid op_kind: %d\n", kind);
+    return false;
+  }
+
   return true;
 }
 
@@ -193,21 +204,23 @@ load_elf_image(uintptr_t img_start,
   printf(BOOT FUNC("load_elf_image") "ELF allocation: [%p,%p)\n",
          (void *)elf_alloc,
          (void *)elf_alloc + elf_size);
-  
+
   // -----------------------------------------------------------------------------------------------
   // Now that we know the source address for the copies, fill out the loader_ops array
 
   for (i = 0; i < ehdr->e_phnum; i++) {
     phdr = (Elf32_Phdr *)(img_start + ehdr->e_phoff + i * ehdr->e_phentsize);
     if (phdr->p_type == PT_LOAD) {
-      if(phdr->p_filesz > 0) {
-        if (!register_loader_op(OP_COPY, phdr->p_vaddr, elf_alloc + phdr->p_offset, phdr->p_filesz)) {
+      if (phdr->p_filesz > 0) {
+        if (!register_loader_op(
+              OP_COPY, phdr->p_vaddr, elf_alloc + phdr->p_offset, phdr->p_filesz)) {
           printf(BOOT FUNC("load_elf_image") ERROR "failed to register loader operation\n");
           return false;
         }
       }
-      if(phdr->p_filesz < phdr->p_memsz) {
-        if(!register_loader_op(OP_ZERO, phdr->p_vaddr + phdr->p_filesz, 0, phdr->p_memsz - phdr->p_filesz)) {
+      if (phdr->p_filesz < phdr->p_memsz) {
+        if (!register_loader_op(
+              OP_ZERO, phdr->p_vaddr + phdr->p_filesz, 0, phdr->p_memsz - phdr->p_filesz)) {
           printf(BOOT FUNC("load_elf_image") ERROR "failed to register loader operation\n");
           return false;
         }
@@ -238,10 +251,11 @@ load_elf_image(uintptr_t img_start,
   // -----------------------------------------------------------------------------------------------
   // Populate the 2nd stage boot image
 
-  memcpy((void*)boot_alloc, ELF_TRAMPOLINE_START, ELF_TRAMPOLINE_END - ELF_TRAMPOLINE_START);
+  memcpy((void *)boot_alloc, ELF_TRAMPOLINE_START, ELF_TRAMPOLINE_END - ELF_TRAMPOLINE_START);
   elf_trampoline_ptr = boot_alloc;
 
-  params = (struct elf_trampoline_params *)(boot_alloc + ELF_TRAMPOLINE_PARAMS - ELF_TRAMPOLINE_START);
+  params =
+    (struct elf_trampoline_params *)(boot_alloc + ELF_TRAMPOLINE_PARAMS - ELF_TRAMPOLINE_START);
   // printf(BOOT FUNC("load_elf_image") "located parameter block at: %p\n", params);
 
   memcpy(params->loader_ops, loader_ops, sizeof loader_ops);
@@ -258,6 +272,7 @@ load_elf_image(uintptr_t img_start,
 }
 
 uintptr_t
-elf_trampoline() {
+elf_trampoline()
+{
   return elf_trampoline_ptr;
 }

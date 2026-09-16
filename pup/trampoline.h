@@ -49,9 +49,18 @@ enum elf_loader_op_kind : uint32_t
 struct elf_loader_op
 {
   enum elf_loader_op_kind kind;
-  // if kind==OP_ZERO, then the low byte of 'src' is the fill character
-  uintptr_t dst, src;
-  size_t size;
+  union {
+    struct {
+      // if kind==OP_ZERO, then the low byte of 'src' is the fill character
+      uintptr_t dst, src;
+      size_t size;
+    } copy;
+    struct {
+      uintptr_t dst;
+      size_t size;
+      uint32_t fill;
+    } fill;
+  };
 };
 
 struct elf_trampoline_params {

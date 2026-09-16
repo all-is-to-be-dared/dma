@@ -1,5 +1,8 @@
 #include <generic/ubsan.h>
 #include <generic/printf.h>
+#include <generic/backtrace.h>
+
+#define TODO "\x1b[33mTODO\x1b[0m"
 
 [[noreturn]]
 static void
@@ -21,28 +24,7 @@ abort()
 
 
 
-// -------------------------------------------------------------------------------------------------
-// TYPE MISMATCH
-
-
-
-
-const char *const TYPE_CHECK_KIND_NAMES[] = {
-  [TCK_Load] = "load of",
-  [TCK_Store] = "store to",
-  [TCK_ReferenceBinding] = "reference binding to",
-  [TCK_MemberAccess] = "member access within",
-  [TCK_MemberCall] = "member call on",
-  [TCK_ConstructorCall] = "constructor call on",
-  [TCK_DowncastPointer] = "downcast of",
-  [TCK_DowncastReference] = "downcast of",
-  [TCK_Upcast] = "upcast of",
-  [TCK_UpcastToVirtualBase] = "cast to virtual base of",
-  [TCK_NonnullAssign] = "_Nonnull binding to",
-  [TCK_DynamicOperation] = "dynamic operation on",
-};
-
-enum error_type
+typedef enum
 {
   ET_GenericUB,
   ET_NullPointerUse,
@@ -81,9 +63,8 @@ enum error_type
   ET_InvalidNullArgumentWithNullability,
   ET_DynamicTypeMismatch,
   // CFIVCall, CFINVCall, CFIDerivedCast, CFIUnrelatedCast, CFIICall, CFIMCall
-};
-
-static const char *error_type_summaries[] = {
+} ErrorType;
+static const char *ERROR_TYPE_SUMMARIES[] = {
   "undefined-behavior",
   "null-pointer-use",
   "null-pointer-use",
@@ -123,61 +104,152 @@ static const char *error_type_summaries[] = {
   // CFIVCall, CFINVCall, CFIDerivedCast, CFIUnrelatedCast, CFIICall, CFIMCall
 };
 
-#define PRE "\x1b[31m\x1b[1m"
-#define NUM "\x1b[35m"
-#define RST "\x1b[0m"
 
-struct ubsan_report_opts
+
+
+typedef struct
 {
-  uintptr_t pc, bp;
+  backtrace_cursor trace_cursor;
   bool unrecoverable;
-};
-#define UBSAN_GET_RETURN_ADDR(level) __builtin_extract_return_addr(__builtin_return_address(level))
-#define UBSAN_GET_FRAME_ADDR(level) __builtin_frame_address(level)
-#define UBSAN_OPTS(etc)                                                  \
-  (struct ubsan_report_opts){ .pc = (uintptr_t)UBSAN_GET_RETURN_ADDR(0), \
-                              .bp = (uintptr_t)UBSAN_GET_FRAME_ADDR(0),  \
-                              etc };
+} ReportOpts;
+// Note: it's okay to create a backtrace cursor if backtrace isn't enabled, but it IS forbidden to
+//       use said cursor if backtrace functionality is not enabled.
+#define UBSAN_OPTS(...) \
+  (ReportOpts){ .trace_cursor = backtrace_cursor_new() __VA_OPT__(, ) __VA_ARGS__ };
 
-static int ubsan_error_index = 0;
 
+
+
+static uint32_t NEXT_REPORT_INDEX = 0;
 static void
-ubsan_report_begin(RTABI_SourceLocation *loc, enum error_type et, struct ubsan_report_opts opts)
+ubsan_report_begin(SourceLocation *loc, ErrorType et, ReportOpts opts)
 {
   printf("\n============================== [UBSAN REPORT %d] ==============================\n",
-         ubsan_error_index);
-  printf("%s:%u:%u: %s: ", loc->filename, loc->line, loc->col, error_type_summaries[et]);
+         NEXT_REPORT_INDEX);
+  printf("%s:%u:%u: %s: ", loc->filename, loc->line, loc->col, ERROR_TYPE_SUMMARIES[et]);
 }
 static void
-ubsan_report_end(struct ubsan_report_opts opts)
+ubsan_report_end(ReportOpts opts)
 {
-  printf("bp=%p lr=%p\n", opts.bp, opts.pc);
+  uintptr_t pc;
+  const char *sym;
+
+  if (backtrace_enabled()) {
+    printf("Backtrace:\n");
+    do {
+      backtrace_cursor_read(&opts.trace_cursor, &pc, &sym);
+      printf("\tat %#10x in \x1b[1m%s\x1b[0m\n", pc, sym ? sym : "(unknown)");
+    } while (backtrace_cursor_next(&opts.trace_cursor));
+  }
+
   printf("============================== [ END REPORT %d ] ==============================\n",
-         ubsan_error_index);
-  ubsan_error_index++;
+         NEXT_REPORT_INDEX);
+  NEXT_REPORT_INDEX++;
+}
+uint32_t
+ubsan_report_count(void)
+{
+  return NEXT_REPORT_INDEX;
 }
 
+
+
+
 static void
-handle_type_mismatch(RTABI_TypeMismatchData *Data,
-                     RTABI_ValueHandle Pointer,
-                     struct ubsan_report_opts opts)
+print_value_int(const TypeDescriptor *td, ValueHandle val)
+{
+  uint32_t bit_width, byte_width, i;
+  ValueHandle masked_val;
+  uint8_t *intp;
+  bool hit_nz;
+
+  assert(td_is_int(td));
+
+  bit_width = td_get_bit_width(td);
+  byte_width = (bit_width + 7) / 8;
+
+  if (!byte_width)
+    printf("0x0");
+
+  if (byte_width <= sizeof val) {
+    masked_val = (~((~(ValueHandle)(0)) << bit_width)) & val;
+    if (!masked_val)
+      printf("0x0");
+    else
+      printf("%#zx", masked_val);
+  } else {
+    printf("0x");
+    i = byte_width - 1;
+    intp = (uint8_t *)val;
+    masked_val = (~(0xff << (bit_width & 7))) & intp[i];
+    hit_nz = false;
+    while (1) {
+      if (hit_nz)
+        printf("%02hhx", (uint8_t)masked_val);
+      else if (masked_val || !i)
+        printf("%hhx", (uint8_t)masked_val);
+      hit_nz |= !!masked_val;
+      if (!i--)
+        break;
+      masked_val = intp[i];
+    };
+  }
+}
+static void
+print_value(const TypeDescriptor *td, ValueHandle val)
+{
+  if (td_is_int(td)) {
+    print_value_int(td, val);
+  } else if (td->type_kind == TK_Float) {
+    printf("TK_Float");
+  } else {
+    printf("TK_Unknown");
+  }
+}
+
+
+
+
+// -------------------------------------------------------------------------------------------------
+// TYPE MISMATCH
+
+
+
+
+const char *const TYPE_CHECK_KIND_NAMES[] = {
+  [TCK_Load] = "load of",
+  [TCK_Store] = "store to",
+  [TCK_ReferenceBinding] = "reference binding to",
+  [TCK_MemberAccess] = "member access within",
+  [TCK_MemberCall] = "member call on",
+  [TCK_ConstructorCall] = "constructor call on",
+  [TCK_DowncastPointer] = "downcast of",
+  [TCK_DowncastReference] = "downcast of",
+  [TCK_Upcast] = "upcast of",
+  [TCK_UpcastToVirtualBase] = "cast to virtual base of",
+  [TCK_NonnullAssign] = "_Nonnull binding to",
+  [TCK_DynamicOperation] = "dynamic operation on",
+};
+
+static void
+handle_type_mismatch(TypeMismatchData *Data, ValueHandle Pointer, ReportOpts opts)
 {
   uintptr_t alignment;
-  enum error_type et;
+  ErrorType ET;
 
   alignment = (uintptr_t)1 << Data->log_alignment;
   if (!Pointer) {
-    et = (Data->type_check_kind == TCK_NonnullAssign) ? ET_NullPointerUseWithNullability
+    ET = (Data->type_check_kind == TCK_NonnullAssign) ? ET_NullPointerUseWithNullability
                                                       : ET_NullPointerUse;
   } else if (Pointer & (alignment - 1)) {
-    et = ET_MisalignedPointerUse;
+    ET = ET_MisalignedPointerUse;
   } else {
-    et = ET_InsufficientObjectSize;
+    ET = ET_InsufficientObjectSize;
   }
 
-  ubsan_report_begin(&Data->loc, et, opts);
+  ubsan_report_begin(&Data->loc, ET, opts);
 
-  switch (et) {
+  switch (ET) {
     case ET_NullPointerUse:
     case ET_NullPointerUseWithNullability:
       printf("%s null pointer of type %s\n",
@@ -187,14 +259,14 @@ handle_type_mismatch(RTABI_TypeMismatchData *Data,
     case ET_MisalignedPointerUse:
       printf("%s misaligned address %p for type %s which requires %d byte alignment\n",
              TYPE_CHECK_KIND_NAMES[Data->type_check_kind],
-             Pointer,
+             (void *)Pointer,
              Data->ty->type_name,
              alignment);
       break;
     case ET_InsufficientObjectSize:
       printf("%s address %p with insufficient space for an object of type %s\n",
              TYPE_CHECK_KIND_NAMES[Data->type_check_kind],
-             Pointer,
+             (void *)Pointer,
              Data->ty->type_name);
       break;
     default:
@@ -202,21 +274,21 @@ handle_type_mismatch(RTABI_TypeMismatchData *Data,
   }
 
   if (Pointer)
-    printf("NOTE: %p: pointer points to here\n", Pointer);
+    printf("NOTE: %p: pointer points to here\n", (void *)Pointer);
 
   ubsan_report_end(opts);
 }
 
 void
-__ubsan_handle_type_mismatch_v1(RTABI_TypeMismatchData *Data, RTABI_ValueHandle Pointer)
+__ubsan_handle_type_mismatch_v1(TypeMismatchData *Data, ValueHandle Pointer)
 {
-  struct ubsan_report_opts opts = UBSAN_OPTS(.unrecoverable = false);
+  ReportOpts opts = UBSAN_OPTS(false);
   handle_type_mismatch(Data, Pointer, opts);
 }
 void
-__ubsan_handle_type_mismatch_v1_abort(RTABI_TypeMismatchData *Data, RTABI_ValueHandle Pointer)
+__ubsan_handle_type_mismatch_v1_abort(TypeMismatchData *Data, ValueHandle Pointer)
 {
-  struct ubsan_report_opts opts = UBSAN_OPTS(.unrecoverable = false);
+  ReportOpts opts = UBSAN_OPTS(true);
   handle_type_mismatch(Data, Pointer, opts);
   ubsan_abort();
 }
@@ -231,29 +303,32 @@ __ubsan_handle_type_mismatch_v1_abort(RTABI_TypeMismatchData *Data, RTABI_ValueH
 
 
 static void
-handle_alignment_assumption(RTABI_AlignmentAssumptionData *Data,
-                            RTABI_ValueHandle Pointer,
-                            RTABI_ValueHandle Alignment,
-                            RTABI_ValueHandle Offset)
+handle_alignment_assumption(AlignmentAssumptionData *Data,
+                            ValueHandle Pointer,
+                            ValueHandle Alignment,
+                            ValueHandle Offset,
+                            ReportOpts opts)
 {
   todo("implement me\n");
 }
 
 void
-__ubsan_handle_alignment_assumption(RTABI_AlignmentAssumptionData *Data,
-                                    RTABI_ValueHandle Pointer,
-                                    RTABI_ValueHandle Alignment,
-                                    RTABI_ValueHandle Offset)
+__ubsan_handle_alignment_assumption(AlignmentAssumptionData *Data,
+                                    ValueHandle Pointer,
+                                    ValueHandle Alignment,
+                                    ValueHandle Offset)
 {
-  handle_alignment_assumption(Data, Pointer, Alignment, Offset);
+  ReportOpts opts = UBSAN_OPTS(false);
+  handle_alignment_assumption(Data, Pointer, Alignment, Offset, opts);
 }
 void
-__ubsan_handle_alignment_assumption_abort(RTABI_AlignmentAssumptionData *Data,
-                                          RTABI_ValueHandle Pointer,
-                                          RTABI_ValueHandle Alignment,
-                                          RTABI_ValueHandle Offset)
+__ubsan_handle_alignment_assumption_abort(AlignmentAssumptionData *Data,
+                                          ValueHandle Pointer,
+                                          ValueHandle Alignment,
+                                          ValueHandle Offset)
 {
-  handle_alignment_assumption(Data, Pointer, Alignment, Offset);
+  ReportOpts opts = UBSAN_OPTS(true);
+  handle_alignment_assumption(Data, Pointer, Alignment, Offset, opts);
   ubsan_abort();
 }
 
@@ -267,72 +342,65 @@ __ubsan_handle_alignment_assumption_abort(RTABI_AlignmentAssumptionData *Data,
 
 
 static void
-handle_integer_overflow(RTABI_OverflowData *Data,
-                        RTABI_ValueHandle LHS,
-                        RTABI_ValueHandle RHS,
-                        const char *symbol)
+handle_integer_overflow(OverflowData *Data,
+                        ValueHandle LHS,
+                        ValueHandle RHS,
+                        const char *symbol,
+                        ReportOpts opts)
 {
-  todo("implement me!\n");
+  ErrorType ET;
+  bool is_signed;
+
+  is_signed = td_is_sint(Data->ty);
+  ET = is_signed ? ET_SignedIntegerOverflow : ET_UnsignedIntegerOverflow;
+  ubsan_report_begin(&Data->loc, ET, opts);
+
+  printf("%s integer overflow: ", is_signed ? "signed" : "unsigned");
+  print_value(Data->ty, LHS);
+  printf(" %s ", symbol);
+  print_value(Data->ty, RHS);
+  printf(" cannot be represented in the type %s\n", Data->ty->type_name);
+
+  ubsan_report_end(opts);
 }
 
 void
-__ubsan_handle_add_overflow(RTABI_OverflowData *Data, RTABI_ValueHandle LHS, RTABI_ValueHandle RHS)
+__ubsan_handle_add_overflow(OverflowData *Data, ValueHandle LHS, ValueHandle RHS)
 {
-  handle_integer_overflow(Data, LHS, RHS, "+");
+  ReportOpts opts = UBSAN_OPTS(false);
+  handle_integer_overflow(Data, LHS, RHS, "+", opts);
 }
 void
-__ubsan_handle_add_overflow_abort(RTABI_OverflowData *Data,
-                                  RTABI_ValueHandle LHS,
-                                  RTABI_ValueHandle RHS)
+__ubsan_handle_add_overflow_abort(OverflowData *Data, ValueHandle LHS, ValueHandle RHS)
 {
-  handle_integer_overflow(Data, LHS, RHS, "+");
+  ReportOpts opts = UBSAN_OPTS(true);
+  handle_integer_overflow(Data, LHS, RHS, "+", opts);
   ubsan_abort();
 }
 void
-__ubsan_handle_sub_overflow(RTABI_OverflowData *Data, RTABI_ValueHandle LHS, RTABI_ValueHandle RHS)
+__ubsan_handle_sub_overflow(OverflowData *Data, ValueHandle LHS, ValueHandle RHS)
 {
-  handle_integer_overflow(Data, LHS, RHS, "+");
+  ReportOpts opts = UBSAN_OPTS(false);
+  handle_integer_overflow(Data, LHS, RHS, "-", opts);
 }
 void
-__ubsan_handle_sub_overflow_abort(RTABI_OverflowData *Data,
-                                  RTABI_ValueHandle LHS,
-                                  RTABI_ValueHandle RHS)
+__ubsan_handle_sub_overflow_abort(OverflowData *Data, ValueHandle LHS, ValueHandle RHS)
 {
-  handle_integer_overflow(Data, LHS, RHS, "-");
+  ReportOpts opts = UBSAN_OPTS(true);
+  handle_integer_overflow(Data, LHS, RHS, "-", opts);
   ubsan_abort();
 }
 void
-__ubsan_handle_mul_overflow(RTABI_OverflowData *Data, RTABI_ValueHandle LHS, RTABI_ValueHandle RHS)
+__ubsan_handle_mul_overflow(OverflowData *Data, ValueHandle LHS, ValueHandle RHS)
 {
-  handle_integer_overflow(Data, LHS, RHS, "+");
+  ReportOpts opts = UBSAN_OPTS(false);
+  handle_integer_overflow(Data, LHS, RHS, "*", opts);
 }
 void
-__ubsan_handle_mul_overflow_abort(RTABI_OverflowData *Data,
-                                  RTABI_ValueHandle LHS,
-                                  RTABI_ValueHandle RHS)
+__ubsan_handle_mul_overflow_abort(OverflowData *Data, ValueHandle LHS, ValueHandle RHS)
 {
-  handle_integer_overflow(Data, LHS, RHS, "*");
-  ubsan_abort();
-}
-
-
-
-
-static void
-handle_negate_overflow(RTABI_OverflowData *Data, RTABI_ValueHandle OldVal)
-{
-  todo("implement me!\n");
-}
-
-void
-__ubsan_handle_negate_overflow(RTABI_OverflowData *Data, RTABI_ValueHandle OldVal)
-{
-  handle_negate_overflow(Data, OldVal);
-}
-void
-__ubsan_handle_negate_overflow_abort(RTABI_OverflowData *Data, RTABI_ValueHandle OldVal)
-{
-  handle_negate_overflow(Data, OldVal);
+  ReportOpts opts = UBSAN_OPTS(true);
+  handle_integer_overflow(Data, LHS, RHS, "*", opts);
   ubsan_abort();
 }
 
@@ -340,24 +408,116 @@ __ubsan_handle_negate_overflow_abort(RTABI_OverflowData *Data, RTABI_ValueHandle
 
 
 static void
-handle_divrem_overflow(RTABI_OverflowData *Data, RTABI_ValueHandle LHS, RTABI_ValueHandle RHS)
+handle_negate_overflow(OverflowData *Data, ValueHandle OldVal, ReportOpts opts)
 {
-  todo("implement me!\n");
+  ErrorType ET;
+  bool is_signed;
+
+  is_signed = td_is_sint(Data->ty);
+  ET = is_signed ? ET_SignedIntegerOverflow : ET_UnsignedIntegerOverflow;
+
+  ubsan_report_begin(&Data->loc, ET, opts);
+
+  printf("%s integer overflow: negation of ", is_signed ? "signed" : "unsigned");
+  print_value(Data->ty, OldVal);
+  printf(" cannot be represented in type %s\n", Data->ty->type_name);
+
+  ubsan_report_end(opts);
 }
 
 void
-__ubsan_handle_divrem_overflow(RTABI_OverflowData *Data,
-                               RTABI_ValueHandle LHS,
-                               RTABI_ValueHandle RHS)
+__ubsan_handle_negate_overflow(OverflowData *Data, ValueHandle OldVal)
 {
-  handle_divrem_overflow(Data, LHS, RHS);
+  ReportOpts opts = UBSAN_OPTS(false);
+  handle_negate_overflow(Data, OldVal, opts);
 }
 void
-__ubsan_handle_divrem_overflow_abort(RTABI_OverflowData *Data,
-                                     RTABI_ValueHandle LHS,
-                                     RTABI_ValueHandle RHS)
+__ubsan_handle_negate_overflow_abort(OverflowData *Data, ValueHandle OldVal)
 {
-  handle_divrem_overflow(Data, LHS, RHS);
+  ReportOpts opts = UBSAN_OPTS(true);
+  handle_negate_overflow(Data, OldVal, opts);
+  ubsan_abort();
+}
+
+
+
+
+static bool
+is_minus_one(const TypeDescriptor *td, ValueHandle val)
+{
+  uint32_t bit_width, i;
+  ValueHandle imask;
+  uint8_t *intp, v;
+
+  if (!td_is_int(td))
+    return false;
+  if (td_is_uint(td))
+    return false;
+
+  bit_width = td_get_bit_width(td);
+  i = (bit_width + 7) / 8;
+  if (!i)
+    return false;
+
+  if (i <= 4) {
+    imask = (~(ValueHandle)0) << bit_width;
+    return !~(imask | (val & ~imask));
+  } else {
+    intp = (uint8_t *)val;
+    v = (intp[--i] & ~(0xff << (bit_width & 7))) | (0xff << (bit_width & 7));
+    while (1) {
+      if (~v)
+        return false;
+      if (!i)
+        return true;
+      v = intp[--i];
+    }
+  }
+}
+
+static void
+handle_divrem_overflow(OverflowData *Data, ValueHandle LHS, ValueHandle RHS, ReportOpts opts)
+{
+  ErrorType ET;
+
+  // cases:
+  //  1. rhs=-1   => ET_SignedIntegerOverflow
+  //  2. ty:int   => ET_IntegerDivideByZero
+  //  3. ty:float => ET_FloatDivideByZero
+
+  if (is_minus_one(Data->ty, RHS))
+    ET = ET_SignedIntegerOverflow;
+  else if (td_is_int(Data->ty))
+    ET = ET_IntegerDivideByZero;
+  else if (td_is_float(Data->ty))
+    ET = ET_FloatDivideByZero;
+  else
+    panic("handle_divrem_overflow: RHS is not an integer or float");
+
+  ubsan_report_begin(&Data->loc, ET, opts);
+
+  if (ET == ET_SignedIntegerOverflow) {
+    printf("division of ");
+    print_value(Data->ty, LHS);
+    printf(" by -1 cannot be represented in type %s\n", Data->ty->type_name);
+  } else {
+    printf("division by zero\n");
+  }
+
+  ubsan_report_end(opts);
+}
+
+void
+__ubsan_handle_divrem_overflow(OverflowData *Data, ValueHandle LHS, ValueHandle RHS)
+{
+  ReportOpts opts = UBSAN_OPTS(false);
+  handle_divrem_overflow(Data, LHS, RHS, opts);
+}
+void
+__ubsan_handle_divrem_overflow_abort(OverflowData *Data, ValueHandle LHS, ValueHandle RHS)
+{
+  ReportOpts opts = UBSAN_OPTS(true);
+  handle_divrem_overflow(Data, LHS, RHS, opts);
   ubsan_abort();
 }
 
@@ -371,24 +531,20 @@ __ubsan_handle_divrem_overflow_abort(RTABI_OverflowData *Data,
 
 
 static void
-handle_shift_out_of_bounds(RTABI_ShiftOutOfBoundsData *Data,
-                           RTABI_ValueHandle LHS,
-                           RTABI_ValueHandle RHS)
+handle_shift_out_of_bounds(ShiftOutOfBoundsData *Data, ValueHandle LHS, ValueHandle RHS)
 {
   todo("implement me!\n");
 }
 
 void
-__ubsan_handle_shift_out_of_bounds(RTABI_ShiftOutOfBoundsData *Data,
-                                   RTABI_ValueHandle LHS,
-                                   RTABI_ValueHandle RHS)
+__ubsan_handle_shift_out_of_bounds(ShiftOutOfBoundsData *Data, ValueHandle LHS, ValueHandle RHS)
 {
   handle_shift_out_of_bounds(Data, LHS, RHS);
 }
 void
-__ubsan_handle_shift_out_of_bounds_abort(RTABI_ShiftOutOfBoundsData *Data,
-                                         RTABI_ValueHandle LHS,
-                                         RTABI_ValueHandle RHS)
+__ubsan_handle_shift_out_of_bounds_abort(ShiftOutOfBoundsData *Data,
+                                         ValueHandle LHS,
+                                         ValueHandle RHS)
 {
   handle_shift_out_of_bounds(Data, LHS, RHS);
   ubsan_abort();
@@ -404,18 +560,18 @@ __ubsan_handle_shift_out_of_bounds_abort(RTABI_ShiftOutOfBoundsData *Data,
 
 
 static void
-handle_out_of_bounds(RTABI_OutOfBoundsData *Data, RTABI_ValueHandle Index)
+handle_out_of_bounds(OutOfBoundsData *Data, ValueHandle Index)
 {
   todo("implement me!\n");
 }
 
 void
-__ubsan_handle_out_of_bounds(RTABI_OutOfBoundsData *Data, RTABI_ValueHandle Index)
+__ubsan_handle_out_of_bounds(OutOfBoundsData *Data, ValueHandle Index)
 {
   handle_out_of_bounds(Data, Index);
 }
 void
-__ubsan_handle_out_of_bounds_abort(RTABI_OutOfBoundsData *Data, RTABI_ValueHandle Index)
+__ubsan_handle_out_of_bounds_abort(OutOfBoundsData *Data, ValueHandle Index)
 {
   handle_out_of_bounds(Data, Index);
   ubsan_abort();
@@ -458,13 +614,13 @@ __ubsan_handle_local_out_of_bounds_abort()
 
 
 void
-__ubsan_handle_builtin_unreachable(RTABI_UnreachableData *Data)
+__ubsan_handle_builtin_unreachable(UnreachableData *Data)
 {
   todo("implement me!\n");
 }
 
 void
-__ubsan_handle_missing_return(RTABI_UnreachableData *Data)
+__ubsan_handle_missing_return(UnreachableData *Data)
 {
   todo("implement me!\n");
 }
@@ -479,18 +635,18 @@ __ubsan_handle_missing_return(RTABI_UnreachableData *Data)
 
 
 static void
-handle_vla_bound_not_positive(RTABI_VLABoundData *Data, RTABI_ValueHandle Bound)
+handle_vla_bound_not_positive(VLABoundData *Data, ValueHandle Bound)
 {
   todo("implement me!\n");
 }
 
 void
-__ubsan_handle_vla_bound_not_positive(RTABI_VLABoundData *Data, RTABI_ValueHandle Bound)
+__ubsan_handle_vla_bound_not_positive(VLABoundData *Data, ValueHandle Bound)
 {
   handle_vla_bound_not_positive(Data, Bound);
 }
 void
-__ubsan_handle_vla_bound_not_positive_abort(RTABI_VLABoundData *Data, RTABI_ValueHandle Bound)
+__ubsan_handle_vla_bound_not_positive_abort(VLABoundData *Data, ValueHandle Bound)
 {
   handle_vla_bound_not_positive(Data, Bound);
   ubsan_abort();
@@ -506,18 +662,18 @@ __ubsan_handle_vla_bound_not_positive_abort(RTABI_VLABoundData *Data, RTABI_Valu
 
 
 static void
-handle_float_cast_overflow(void *Data, RTABI_ValueHandle From)
+handle_float_cast_overflow(void *Data, ValueHandle From)
 {
   todo("implement me!\n");
 }
 
 void
-__ubsan_handle_float_cast_overflow(void *Data, RTABI_ValueHandle From)
+__ubsan_handle_float_cast_overflow(void *Data, ValueHandle From)
 {
   handle_float_cast_overflow(Data, From);
 }
 void
-__ubsan_handle_float_cast_overflow_abort(void *Data, RTABI_ValueHandle From)
+__ubsan_handle_float_cast_overflow_abort(void *Data, ValueHandle From)
 {
   handle_float_cast_overflow(Data, From);
   ubsan_abort();
@@ -533,18 +689,18 @@ __ubsan_handle_float_cast_overflow_abort(void *Data, RTABI_ValueHandle From)
 
 
 static void
-handle_load_invalid_value(RTABI_InvalidValueData *Data, RTABI_ValueHandle Val)
+handle_load_invalid_value(InvalidValueData *Data, ValueHandle Val)
 {
   todo("implement me!\n");
 }
 
 void
-__ubsan_handle_load_invalid_value(RTABI_InvalidValueData *Data, RTABI_ValueHandle Val)
+__ubsan_handle_load_invalid_value(InvalidValueData *Data, ValueHandle Val)
 {
   handle_load_invalid_value(Data, Val);
 }
 void
-__ubsan_handle_load_invalid_value_abort(RTABI_InvalidValueData *Data, RTABI_ValueHandle Val)
+__ubsan_handle_load_invalid_value_abort(InvalidValueData *Data, ValueHandle Val)
 {
   handle_load_invalid_value(Data, Val);
   ubsan_abort();
@@ -560,26 +716,62 @@ __ubsan_handle_load_invalid_value_abort(RTABI_InvalidValueData *Data, RTABI_Valu
 
 
 static void
-handle_implicit_conversion(RTABI_ImplicitConversionData *Data,
-                           RTABI_ValueHandle Src,
-                           RTABI_ValueHandle Dst)
+handle_implicit_conversion(ImplicitConversionData *Data,
+                           ValueHandle Src,
+                           ValueHandle Dst,
+                           ReportOpts opts)
 {
-  todo("implement me!\n");
+  ErrorType ET;
+
+  switch (Data->kind) {
+    case ICCK_IntegerTruncation:
+      panic("handle_implicit_conversion: ICCK_IntegerTruncation is no longer supported. Please "
+            "update your compiler.\n");
+    case ICCK_UnsignedIntegerTruncation:
+      ET = ET_ImplicitUnsignedIntegerTruncation;
+      break;
+    case ICCK_SignedIntegerTruncation:
+      ET = ET_ImplicitSignedIntegerTruncation;
+      break;
+    case ICCK_IntegerSignChange:
+      ET = ET_ImplicitSignedIntegerSignChange;
+      break;
+    case ICCK_SignedIntegerTruncationOrSignChange:
+      ET = ET_ImplicitSignedIntegerTruncationOrSignChange;
+      break;
+  }
+
+  ubsan_report_begin(&Data->loc, ET, opts);
+
+  // Destination is a bitfield of size bitfield_bits (we don't care about the reverse case).
+  printf("implicit conversion from type %s of value ", Data->from_ty->type_name);
+  print_value(Data->from_ty, Src);
+  printf(" (%d-bit, %s) to type %s changed the value to ",
+         td_get_bit_width(Data->from_ty),
+         td_is_sint(Data->from_ty) ? "signed" : "unsigned",
+         Data->to_ty->type_name);
+  print_value(Data->to_ty, Dst);
+  printf(" (%d-bit%s, %s)\n",
+         Data->bitfield_bits ?: td_get_bit_width(Data->to_ty),
+         Data->bitfield_bits ? " bitfield " : "",
+         td_is_sint(Data->to_ty) ? "signed" : "unsigned");
+
+  ubsan_report_end(opts);
 }
 
 void
-__ubsan_handle_implicit_conversion(RTABI_ImplicitConversionData *Data,
-                                   RTABI_ValueHandle Src,
-                                   RTABI_ValueHandle Dst)
+__ubsan_handle_implicit_conversion(ImplicitConversionData *Data, ValueHandle Src, ValueHandle Dst)
 {
-  handle_implicit_conversion(Data, Src, Dst);
+  ReportOpts opts = UBSAN_OPTS(false);
+  handle_implicit_conversion(Data, Src, Dst, opts);
 }
 void
-__ubsan_handle_implicit_conversion_abort(RTABI_ImplicitConversionData *Data,
-                                         RTABI_ValueHandle Src,
-                                         RTABI_ValueHandle Dst)
+__ubsan_handle_implicit_conversion_abort(ImplicitConversionData *Data,
+                                         ValueHandle Src,
+                                         ValueHandle Dst)
 {
-  handle_implicit_conversion(Data, Src, Dst);
+  ReportOpts opts = UBSAN_OPTS(true);
+  handle_implicit_conversion(Data, Src, Dst, opts);
   ubsan_abort();
 }
 
@@ -593,18 +785,18 @@ __ubsan_handle_implicit_conversion_abort(RTABI_ImplicitConversionData *Data,
 
 
 static void
-handle_invalid_builtin(RTABI_InvalidBuiltinData *Data)
+handle_invalid_builtin(InvalidBuiltinData *Data)
 {
   todo("implement me!\n");
 }
 
 void
-__ubsan_handle_invalid_builtin(RTABI_InvalidBuiltinData *Data)
+__ubsan_handle_invalid_builtin(InvalidBuiltinData *Data)
 {
   handle_invalid_builtin(Data);
 }
 void
-__ubsan_handle_invalid_builtin_abort(RTABI_InvalidBuiltinData *Data)
+__ubsan_handle_invalid_builtin_abort(InvalidBuiltinData *Data)
 {
   handle_invalid_builtin(Data);
   ubsan_abort();
@@ -620,18 +812,18 @@ __ubsan_handle_invalid_builtin_abort(RTABI_InvalidBuiltinData *Data)
 
 
 static void
-handle_nonnull_return(RTABI_NonNullReturnData *Data, RTABI_SourceLocation *Loc)
+handle_nonnull_return(NonNullReturnData *Data, SourceLocation *Loc)
 {
   todo("implement me!\n");
 }
 
 void
-__ubsan_handle_nonnull_return_v1(RTABI_NonNullReturnData *Data, RTABI_SourceLocation *Loc)
+__ubsan_handle_nonnull_return_v1(NonNullReturnData *Data, SourceLocation *Loc)
 {
   handle_nonnull_return(Data, Loc);
 }
 void
-__ubsan_handle_nonnull_return_v1_abort(RTABI_NonNullReturnData *Data, RTABI_SourceLocation *Loc)
+__ubsan_handle_nonnull_return_v1_abort(NonNullReturnData *Data, SourceLocation *Loc)
 {
   handle_nonnull_return(Data, Loc);
   ubsan_abort();
@@ -641,18 +833,18 @@ __ubsan_handle_nonnull_return_v1_abort(RTABI_NonNullReturnData *Data, RTABI_Sour
 
 
 static void
-handle_nullability_return(RTABI_NonNullReturnData *Data, RTABI_SourceLocation *Loc)
+handle_nullability_return(NonNullReturnData *Data, SourceLocation *Loc)
 {
   todo("implement me!\n");
 }
 
 void
-__ubsan_handle_nullability_return_v1(RTABI_NonNullReturnData *Data, RTABI_SourceLocation *Loc)
+__ubsan_handle_nullability_return_v1(NonNullReturnData *Data, SourceLocation *Loc)
 {
   handle_nullability_return(Data, Loc);
 }
 void
-__ubsan_handle_nullability_return_v1_abort(RTABI_NonNullReturnData *Data, RTABI_SourceLocation *Loc)
+__ubsan_handle_nullability_return_v1_abort(NonNullReturnData *Data, SourceLocation *Loc)
 {
   handle_nullability_return(Data, Loc);
   ubsan_abort();
@@ -668,18 +860,18 @@ __ubsan_handle_nullability_return_v1_abort(RTABI_NonNullReturnData *Data, RTABI_
 
 
 static void
-handle_nonnull_arg(RTABI_NonNullArgData *Data)
+handle_nonnull_arg(NonNullArgData *Data)
 {
   todo("implement me!\n");
 }
 
 void
-__ubsan_handle_nonnull_arg(RTABI_NonNullArgData *Data)
+__ubsan_handle_nonnull_arg(NonNullArgData *Data)
 {
   handle_nonnull_arg(Data);
 }
 void
-__ubsan_handle_nonnull_arg_abort(RTABI_NonNullArgData *Data)
+__ubsan_handle_nonnull_arg_abort(NonNullArgData *Data)
 {
   handle_nonnull_arg(Data);
   ubsan_abort();
@@ -689,18 +881,18 @@ __ubsan_handle_nonnull_arg_abort(RTABI_NonNullArgData *Data)
 
 
 static void
-handle_nullability_arg(RTABI_NonNullArgData *Data)
+handle_nullability_arg(NonNullArgData *Data)
 {
   todo("implement me!\n");
 }
 
 void
-__ubsan_handle_nullability_arg(RTABI_NonNullArgData *Data)
+__ubsan_handle_nullability_arg(NonNullArgData *Data)
 {
   handle_nullability_arg(Data);
 }
 void
-__ubsan_handle_nullability_arg_abort(RTABI_NonNullArgData *Data)
+__ubsan_handle_nullability_arg_abort(NonNullArgData *Data)
 {
   handle_nullability_arg(Data);
   ubsan_abort();
@@ -716,11 +908,9 @@ __ubsan_handle_nullability_arg_abort(RTABI_NonNullArgData *Data)
 
 
 static void
-handle_pointer_overflow(RTABI_PointerOverflowData *Data,
-                        RTABI_ValueHandle Base,
-                        RTABI_ValueHandle Result)
+handle_pointer_overflow(PointerOverflowData *Data, ValueHandle Base, ValueHandle Result)
 {
-  // enum error_type et;
+  // ErrorType et;
 
   // if(Base == 0 && Result == 0)
   //   et = ET_NullptrWithOffset;
@@ -742,16 +932,14 @@ handle_pointer_overflow(RTABI_PointerOverflowData *Data,
 }
 
 void
-__ubsan_handle_pointer_overflow(RTABI_PointerOverflowData *Data,
-                                RTABI_ValueHandle Base,
-                                RTABI_ValueHandle Result)
+__ubsan_handle_pointer_overflow(PointerOverflowData *Data, ValueHandle Base, ValueHandle Result)
 {
   handle_pointer_overflow(Data, Base, Result);
 }
 void
-__ubsan_handle_pointer_overflow_abort(RTABI_PointerOverflowData *Data,
-                                      RTABI_ValueHandle Base,
-                                      RTABI_ValueHandle Result)
+__ubsan_handle_pointer_overflow_abort(PointerOverflowData *Data,
+                                      ValueHandle Base,
+                                      ValueHandle Result)
 {
   handle_pointer_overflow(Data, Base, Result);
   ubsan_abort();
@@ -767,19 +955,18 @@ __ubsan_handle_pointer_overflow_abort(RTABI_PointerOverflowData *Data,
 
 
 static void
-handle_function_type_mismatch(RTABI_FunctionTypeMismatchData *Data, RTABI_ValueHandle Value)
+handle_function_type_mismatch(FunctionTypeMismatchData *Data, ValueHandle Value)
 {
   todo("implement me!\n");
 }
 
 void
-__ubsan_handle_function_type_mismatch(RTABI_FunctionTypeMismatchData *Data, RTABI_ValueHandle Value)
+__ubsan_handle_function_type_mismatch(FunctionTypeMismatchData *Data, ValueHandle Value)
 {
   handle_function_type_mismatch(Data, Value);
 }
 void
-__ubsan_handle_function_type_mismatch_abort(RTABI_FunctionTypeMismatchData *Data,
-                                            RTABI_ValueHandle Value)
+__ubsan_handle_function_type_mismatch_abort(FunctionTypeMismatchData *Data, ValueHandle Value)
 {
   handle_function_type_mismatch(Data, Value);
   ubsan_abort();

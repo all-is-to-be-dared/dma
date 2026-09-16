@@ -1,7 +1,9 @@
 d = libc/
-newlib_cflags = -Inewlib-cygwin/newlib/libc/string/
+d2 = newlib-cygwin/newlib/libc/string
+newlib_cflags = -I${d2}/
 
-build libc/libnewlib.bcm2835.a: arm_mklib $d/memcmp.o $d/memchr.o $d/memmove.o $d/memset.o
+build libc/libnewlib.bcm2835.a: arm_mklib $d/memcmp.o $d/memchr.o $d/memmove.o $d/memset.o $
+                                          $d/strstr.o $d/strnlen.o $d/strchr.o
 build $d/memcmp.o: arm_cc $d/memcmp.c
   cflags_ext = $newlib_cflags
 build $d/memchr.o: arm_cc $d/memchr.c
@@ -9,6 +11,12 @@ build $d/memchr.o: arm_cc $d/memchr.c
 build $d/memmove.o: arm_cc $d/memmove.c
   cflags_ext = $newlib_cflags
 build $d/memset.o: arm_cc $d/memset.c
+  cflags_ext = $newlib_cflags
+build $d/strstr.o: arm_cc $d2/strstr.c
+  cflags_ext = $newlib_cflags
+build $d/strnlen.o: arm_cc $d2/strnlen.c
+  cflags_ext = $newlib_cflags
+build $d/strchr.o: arm_cc $d2/strchr.c
   cflags_ext = $newlib_cflags
 
 include libc/newlib-arm/build.ninja

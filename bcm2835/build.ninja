@@ -3,7 +3,7 @@
 
 build bcm2835/libplatform.a: arm_mklib $
   bcm2835/init.o bcm2835/pwrman.o bcm2835/uart.o bcm2835/gpio.o bcm2835/printf.o bcm2835/systmr.o $
-  bcm2835/ptags.o bcm2835/extra.o
+  bcm2835/ptags.o bcm2835/extra.o bcm2835/backtrace.o bcm2835/ubsan.o bcm2835/mmu.o
 build bcm2835/init.o: arm_cc bcm2835/init.c
 build bcm2835/pwrman.o: arm_cc bcm2835/pwrman.c
 build bcm2835/uart.o: arm_cc bcm2835/uart.c
@@ -12,8 +12,10 @@ build bcm2835/systmr.o: arm_cc bcm2835/systmr.c
 build bcm2835/ptags.o: arm_cc bcm2835/ptags.c
 build bcm2835/extra.o: arm_cc bcm2835/extra.c
 build bcm2835/printf.o: arm_cc printf/printf.c
-  cflags_ext = -DPRINTF_DISABLE_SUPPORT_FLOAT=1
+  # cflags_ext = -DPRINTF_DISABLE_SUPPORT_FLOAT=0
 build bcm2835/ubsan.o: arm_cc generic/ubsan.c
+build bcm2835/backtrace.o: arm_cc generic/backtrace.c
+build bcm2835/mmu.o: arm_cc bcm2835/mmu.c
 
 default bcm2835/libplatform.a
 

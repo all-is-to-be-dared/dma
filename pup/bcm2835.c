@@ -2,25 +2,21 @@
 #include <inttypes.h>
 #include <elf.h>
 
-#include "generic/printf.h"
+#include <generic/printf.h>
 
-#include "pup/xz-embedded/xz.h"
-#include "pup/xz_config.h"
+#include <pup/xz-embedded/xz.h>
+#include <pup/xz_config.h>
 
-#include "generic/math.h"
-#include "bcm2835/platform.h"
-#include "pup/common.h"
-#include "pup/config.h"
-#include "generic/assert.h"
+#include <generic/math.h>
+#include <bcm2835/platform.h>
+#include <pup/common.h>
+#include <pup/config.h>
+#include <generic/assert.h>
 
-#include "pup/trampoline.h"
+#include <pup/trampoline.h>
 
-#include "pup/protocol.h"
-static_assert(sizeof(struct elf_loader_op) == 16 && alignof(struct elf_loader_op) <= 16 &&
-              offsetof(struct elf_loader_op, kind) == 0 &&
-              offsetof(struct elf_loader_op, dst) == 4 &&
-              offsetof(struct elf_loader_op, src) == 8 &&
-              offsetof(struct elf_loader_op, size) == 12);
+#include <pup/protocol.h>
+static_assert(sizeof(struct elf_loader_op) == 16);
 
 bool
 platform_can_read(void)
@@ -119,6 +115,13 @@ platform_init_meta(meta_t *meta)
   prog_start = (uintptr_t)__prog_start;
   prog_end = (uintptr_t)__prog_end;
 
+  // printf("meta: IF=%08x CT=%08x WZ=%08x MZ=%08x MC=%08x\n",
+  //        meta->image_format,
+  //        meta->compression_type,
+  //        meta->wire_size,
+  //        meta->mem_size,
+  //        meta->mem_crc32);
+
   if (meta->compression_type >= NUM_COMPRESS_TYPES) {
     printf(BOOT FUNC("platform_init_meta") ERROR "unknown compression type %u\n",
            meta->compression_type);
@@ -182,8 +185,7 @@ platform_init_meta(meta_t *meta)
     (img_start >= prog_start && img_start < prog_end)
     //        | PROGRAM ------------ |
     //  | IMAGE -----? ------------------? |
-    || (img_start < prog_start && img_end > prog_start))
-  {
+    || (img_start < prog_start && img_end > prog_start)) {
     reloc_tgt_start = max(img_start, prog_start);
     reloc_tgt_end = min(img_end, prog_end);
     reloc_size = reloc_tgt_end - reloc_tgt_start;
@@ -458,7 +460,7 @@ static void
 trampoline()
 {
   uint32_t branch_to;
-  switch(META.image_format) {
+  switch (META.image_format) {
     case IMAGE_FLAT_BINARY:
       if (reloc.size) {
         memcpy(reloc.stub_start, TRAMPOLINE_START, TRAMPOLINE_END - TRAMPOLINE_START);
@@ -509,7 +511,7 @@ main(void)
   gpio_pin_set_function(15, FSEL_ALT5);
   gpio_pin_set_function(47, FSEL_OUTP);
 
-  aux_uart_init(BAUD_RATE, 250'000'000);
+  aux_uart_init(BAUD_RATE, 400'000'000);
 
   xz_crc32_init();
 

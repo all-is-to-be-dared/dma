@@ -1,5 +1,5 @@
 # --------------------------------------------------------------------------------------------------
-# TARGET: bcm2835-dma/101-scatter.bin.xz
+# TARGET: bcm2835-dma/101-scatter
 
 build bcm2835-dma/101-scatter.bin.xz: arm_xz bcm2835-dma/101-scatter.bin
 build bcm2835-dma/101-scatter.bin: arm_objcopy bcm2835-dma/101-scatter.elf
@@ -15,18 +15,87 @@ default bcm2835-dma/101-scatter.bin.xz
 
 
 # --------------------------------------------------------------------------------------------------
-# TARGET: bcm2835-dma/arith_test.bin.xz
+# TARGET: bcm2835-dma/arith_test
 
+build bcm2835-dma/arith_test: phony bcm2835-dma/arith_test.elf.xz bcm2835-dma/arith_test.bin.xz
 build bcm2835-dma/arith_test.bin.xz: arm_xz bcm2835-dma/arith_test.bin
 build bcm2835-dma/arith_test.bin: arm_objcopy bcm2835-dma/arith_test.elf
+build bcm2835-dma/arith_test.elf.xz: arm_xz bcm2835-dma/arith_test.elf
 build bcm2835-dma/arith_test.elf: arm_link $
   bcm2835-dma/arith_test.o bcm2835-dma/arith.o bcm2835-dma/libcommon.a | bcm2835-dma/common.ld
   ldflags_ext = -Tbcm2835-dma/common.ld
   libs = bcm2835/libgcc.a
 build bcm2835-dma/arith_test.o: arm_cc bcm2835-dma/arith_test.c
 
-default bcm2835-dma/arith_test.bin.xz
+default bcm2835-dma/arith_test
 
+
+
+
+# --------------------------------------------------------------------------------------------------
+# TARGET: bcm2835-dma/240-ubsan
+
+# build bcm2835-dma/240-ubsan: phony bcm2835-dma/240-ubsan.elf.xz
+# build bcm2835-dma/240-ubsan.elf.xz: arm_xz bcm2835-dma/240-ubsan.elf
+# build bcm2835-dma/240-ubsan.elf: arm_link $
+#   bcm2835-dma/240-ubsan.o bcm2835/libplatform.a bcm2835/libc.a | bcm2835-dma/common.ld
+#   ldflags_ext = -Tbcm2835-dma/common.ld
+#   libs = bcm2835/libgcc.a
+# build bcm2835-dma/240-ubsan.o: arm_cc bcm2835-dma/240-ubsan.c
+#   cflags_ext = -fsanitize=undefined -fsanitize=float-divide-by-zero $
+#                -fsanitize=unsigned-integer-overflow -fsanitize=implicit-conversion $
+#                -fsanitize=local-bounds -fsanitize=vptr -fsanitize=nullability-arg $
+#                -fsanitize=nullability-assign -fsanitize=nullability-return -fno-omit-frame-pointer
+
+# default bcm2835-dma/240-ubsan
+
+
+
+
+# --------------------------------------------------------------------------------------------------
+# TARGET: bcm2835-dma/240-integ
+
+build bcm2835-dma/240-integ: phony bcm2835-dma/240-integ.elf.xz
+build bcm2835-dma/240-integ.elf.xz: arm_xz bcm2835-dma/240-integ.elf
+build bcm2835-dma/240-integ.elf: arm_link $
+  bcm2835-dma/240-integ.o bcm2835/libplatform.a bcm2835/libc.a | bcm2835-dma/common.ld
+  ldflags_ext = -Tbcm2835-dma/common.ld
+  libs = bcm2835/libgcc.a
+build bcm2835-dma/240-integ.o: arm_cc bcm2835-dma/240-integ.c
+
+default bcm2835-dma/240-integ
+
+
+
+
+# --------------------------------------------------------------------------------------------------
+# TARGET: bcm2835-dma/240-superopt
+
+build bcm2835-dma/240-superopt: phony bcm2835-dma/240-superopt.elf.xz
+build bcm2835-dma/240-superopt.elf.xz: arm_xz bcm2835-dma/240-superopt.elf
+build bcm2835-dma/240-superopt.elf: arm_link $
+  bcm2835-dma/240-superopt.o bcm2835/libplatform.a bcm2835/libc.a | bcm2835-dma/common.ld
+  ldflags_ext = -Tbcm2835-dma/common.ld
+  libs = bcm2835/libgcc.a
+build bcm2835-dma/240-superopt.o: arm_cc bcm2835-dma/240-superopt.c
+
+default bcm2835-dma/240-superopt
+
+
+
+
+# --------------------------------------------------------------------------------------------------
+# TARGET: bcm2835-dma/240-stream
+
+build bcm2835-dma/240-stream: phony bcm2835-dma/240-stream.elf.xz
+build bcm2835-dma/240-stream.elf.xz: arm_xz bcm2835-dma/240-stream.elf
+build bcm2835-dma/240-stream.elf: arm_link $
+  bcm2835-dma/240-stream.o bcm2835/libplatform.a bcm2835/libc.a | bcm2835-dma/common.ld
+  ldflags_ext = -Tbcm2835-dma/common.ld
+  libs = bcm2835/libgcc.a
+build bcm2835-dma/240-stream.o: arm_cc bcm2835-dma/240-stream.c
+
+default bcm2835-dma/240-stream
 
 
 

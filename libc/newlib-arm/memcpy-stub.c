@@ -37,5 +37,5 @@
 #elif __ARM_ARCH_ISA_THUMB == 2 && !__ARM_ARCH_ISA_ARM
 /* Defined in memcpy.S.  */
 #else
-# include "newlib-cygwin/newlib/libc/string/memcpy.c"
+# include "memcpy.c"
 #endif

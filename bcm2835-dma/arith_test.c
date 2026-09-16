@@ -9,7 +9,7 @@
 #include <generic/printf.h>
 
 void
-main()
+main(void)
 {
   struct ptag_mem_region arm_mem, vc_mem;
   uint32_t i;

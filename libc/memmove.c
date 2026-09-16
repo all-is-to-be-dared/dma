@@ -36,7 +36,9 @@ QUICKREF
 
 /*SUPPRESS 20*/
 void *
+#ifndef __clang__
 __inhibit_loop_to_libcall
+#endif
 memmove (void *dst_void,
 	const void *src_void,
 	size_t length)

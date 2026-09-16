@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <pup/protocol.h>
 
 #define CONCAT_IMPL(a, b) a##b
 #define CONCAT(a, b) CONCAT_IMPL(a, b)
@@ -201,5 +202,5 @@ aux_uart_read(void);
  * PROGRAM EXECUTION
  */
 
-void
-main(void);
+// void
+// main(struct elf_boot_args *boot_args);
