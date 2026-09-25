@@ -497,7 +497,7 @@ fsm_upload(config_t* config,
 
   for (i = 0; i < NUM_TIMERS; i++) {
     host_printf(
-      DBG_MIN, HOST FUNC("config") "%s period: %lluμs\n", TIMER_NAMES[i], fsm.timers[i].period);
+      DBG_FULL, HOST FUNC("config") "%s period: %lluμs\n", TIMER_NAMES[i], fsm.timers[i].period);
   }
 
   retries = retries_ + 1;

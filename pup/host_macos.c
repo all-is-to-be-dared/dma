@@ -475,6 +475,8 @@ reset_tianleboard(int fd)
   char callup_path[MAXPATHLEN];
   io_service_t serial_service;
   io_registry_entry_t device, curr_device, next_device;
+  struct timespec sleep_req, sleep_rem;
+  
   device = curr_device;
 
   if (-1 == fcntl(fd, F_GETPATH, callup_path)) {
@@ -552,31 +554,6 @@ reset_tianleboard(int fd)
     return RS_FAIL;
   }
 
-  // #define CP210X_VENDOR_SPECIFIC 0xff
-  // #define CP210X_WRITE_LATCH 0x37e1
-  // #define GPIO0_MASK 0x0001
-  // #define GPIO0_HIGH 0x0101
-  // #define GPIO0_LOW 0x0001
-  // uint16_t wIndex = high ? GPIO0_HIGH : GPIO0_LOW;
-  // int rc = libusb_control_transfer(
-  //     cp210x_handle,
-  //     LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
-  //     CP210X_VENDOR_SPECIFIC,
-  //     CP210X_WRITE_LATCH,
-  //     wIndex,
-  //     NULL,
-  //     0,
-  //     1000);
-  // libusb_control_transfer (
-  //  libusb_device_handle *dev_handle,
-  //  uint8_t bmRequestType,
-  //  uint8_t bRequest,
-  //  uint16_t wValue,
-  //  uint16_t wIndex,
-  //  unsigned char *data,
-  //  uint16_t wLength,
-  //  unsigned int timeout)
-
   IOUSBDevRequest req;
 
   req.bmRequestType = USBmakebmRequestType(kUSBOut, kUSBVendor, kUSBDevice);
@@ -591,7 +568,10 @@ reset_tianleboard(int fd)
     return RS_FAIL;
   }
 
-  sleep(1);
+  sleep_req.tv_sec = 0;
+  sleep_req.tv_nsec = 10'000'000; // 10ms
+  while(nanosleep(&sleep_req, &sleep_rem) == -1 && errno == EINTR)
+    sleep_req = sleep_rem;
 
   req.bmRequestType = USBmakebmRequestType(kUSBOut, kUSBVendor, kUSBDevice);
   req.bRequest = 0xff; // cp210x vendor specific
@@ -601,7 +581,7 @@ reset_tianleboard(int fd)
   req.wLength = 0;
   kr = (*device_interface)->DeviceRequest(device_interface, &req);
   if(kr != KERN_SUCCESS) {
-    fprintf(stderr, "%s: low-latch transfer failed: %s (%d)\n", opts.self, mach_error_string(kr), kr);
+    fprintf(stderr, "%s: high-latch transfer failed: %s (%d)\n", opts.self, mach_error_string(kr), kr);
     return RS_FAIL;
   }
 

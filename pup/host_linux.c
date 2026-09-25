@@ -3,34 +3,30 @@
 #define _POSIX_C_SOURCE 199309L
 #define _DEFAULT_SOURCE
 
-#include <unistd.h>
-#include <sys/ioctl.h>
-#include <sys/stat.h>
+#include <asm-generic/termbits.h>
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <string.h>
-#include <dirent.h>
-#include <limits.h>
-#include <stdlib.h>
 #include <libgen.h>
+#include <limits.h>
+#include <linux/usb/ch9.h>
 #include <linux/usbdevice_fs.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/ioctl.h>
+#include <sys/stat.h>
+#include <sys/sysmacros.h>
+#include <time.h>
+#include <unistd.h>
+#include <assert.h>
+#include <ctype.h>
 
-#include "pup/host.h"
 #include "pup/common.h"
-
-#include <asm-generic/termbits.h>
-
-
-
+#include "pup/host.h"
 
 static struct termios2 orig_termios;
 
-
-
-
-static int
-open_serial_dev(const char* path, uint32_t baud)
-{
+static int open_serial_dev(const char *path, uint32_t baud) {
   int fd;
   struct termios2 tios;
   speed_t speed;
@@ -39,47 +35,47 @@ open_serial_dev(const char* path, uint32_t baud)
   opts.dev_path = strdup(path);
   speed = baud;
 
-  // want open to be nonblocking (but not subsequent operations), so we clear O_NONBLOCK later on
+  // want open to be nonblocking (but not subsequent operations), so we clear
+  // O_NONBLOCK later on
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-octal-literals"
   fd = open(path, O_RDWR | O_NOCTTY | O_NONBLOCK);
 #pragma GCC diagnostic pop
   if (fd == -1) {
-    fprintf(stderr, "%s: failed to open %s: %s (%d)\n", opts.self, path, strerror(errno), errno);
+    fprintf(stderr, "%s: failed to open %s: %s (%d)\n", opts.self, path,
+            strerror(errno), errno);
     goto error;
   }
 
   if (ioctl(fd, TIOCEXCL) == -1) {
-    fprintf(stderr, "%s: failed to lock %s: %s (%d)\n", opts.self, path, strerror(errno), errno);
+    fprintf(stderr, "%s: failed to lock %s: %s (%d)\n", opts.self, path,
+            strerror(errno), errno);
     goto error;
   }
 
   if (fcntl(fd, F_SETFL, 0) == -1) {
-    fprintf(
-      stderr, "%s: failed to make %s block: %s (%d)\n", opts.self, path, strerror(errno), errno);
+    fprintf(stderr, "%s: failed to make %s block: %s (%d)\n", opts.self, path,
+            strerror(errno), errno);
     goto error;
   }
 
   if (ioctl(fd, TCGETS2, &orig_termios) == -1) {
-    fprintf(stderr,
-            "%s: failed to get tty attrs for %s: %s (%d)\n",
-            opts.self,
-            path,
-            strerror(errno),
-            errno);
+    fprintf(stderr, "%s: failed to get tty attrs for %s: %s (%d)\n", opts.self,
+            path, strerror(errno), errno);
     goto error;
   }
 
   tios = orig_termios;
 
   // Noncanonical mode:
-  //  input bytes are not assembled into lines, and erase and kill processing does not occur.
+  //  input bytes are not assembled into lines, and erase and kill processing
+  //  does not occur.
   // Writing data and output processing:
-  //  when a process writes one or more bytes to a terminal device file, they are processed
-  //  according to the c_oflag field. The implementation may provide a buffering mechanism; as
-  //  such, when a call to write() completes, all of the bytes written have been scheduled for
-  //  transmission to the device, but the transmission will not necessarily have been
-  //  completed.
+  //  when a process writes one or more bytes to a terminal device file, they
+  //  are processed according to the c_oflag field. The implementation may
+  //  provide a buffering mechanism; as such, when a call to write() completes,
+  //  all of the bytes written have been scheduled for transmission to the
+  //  device, but the transmission will not necessarily have been completed.
   // Special characters:
   //  INTR    if ISIG enabled, generates SIGINT. (disable)
   //  QUIT    if ISIG enabled, generates SIGQUIT. (disable)
@@ -96,14 +92,14 @@ open_serial_dev(const char* path, uint32_t baud)
   //  WERASE  if ICANON
   //  REPRINT if ICANON
   //  DSUSP       similar SUSP
-  //  LNEXT   if IEXTEN set ; receipt of this character causes the next character to be taken
+  //  LNEXT   if IEXTEN set ; receipt of this character causes the next
+  //  character to be taken
   //          literally
-  //  DISCARD if IEXTEN set ; recept of this character toggles the flushing of terminal output
-  //  STATUS  if ICANON
+  //  DISCARD if IEXTEN set ; recept of this character toggles the flushing of
+  //  terminal output STATUS  if ICANON
   // General Terminal Interface:
-  //  Last process to close a terminal device file causes any output to be sent to the device
-  //  and any input to be discarded.
-
+  //  Last process to close a terminal device file causes any output to be sent
+  //  to the device and any input to be discarded.
 
   // INPUT MODES:
   //  c_iflag
@@ -140,14 +136,12 @@ open_serial_dev(const char* path, uint32_t baud)
   //      OLCUC   = translate lower case to upper case
   //      ONOCR   = no CR output at column 0
   //      ONLRET  = NL performs CR function
-  // LNX  OFILL   = send fill characters for a delay, rather than using a timed delay
-  // LNX  OFDEL   = fill character is ASCII DEL if set, else ASCII NUL (not impl.)
-  // LNX  NLDLY   = NL delay mask
-  // LNX  CRDLY   = CR delay mask
-  // LNX  TABDLY  = horizontal tab delay mask
-  // LNX  BSDLY   = backspace delay mask (not impl.)
-  // LNX  VTDLY   = vertical tab delay mask
-  // LNX  FFDLY   = form feed delay mask
+  // LNX  OFILL   = send fill characters for a delay, rather than using a timed
+  // delay LNX  OFDEL   = fill character is ASCII DEL if set, else ASCII NUL
+  // (not impl.) LNX  NLDLY   = NL delay mask LNX  CRDLY   = CR delay mask LNX
+  // TABDLY  = horizontal tab delay mask LNX  BSDLY   = backspace delay mask
+  // (not impl.) LNX  VTDLY   = vertical tab delay mask LNX  FFDLY   = form feed
+  // delay mask
   tios.c_oflag = 0;
 
   // CONTROL MODES:
@@ -167,8 +161,8 @@ open_serial_dev(const char* path, uint32_t baud)
   // MAC  CRTS_IFLOW  = RTS flow control of input
   // MAC  MDMBUF  = flow control output via character
   // LNX  LOBLK   = block output from noncurrent shell layer (not impl.)
-  // LNX  CIBAUD  = mask for input speeds (CBAUD-like, shifted left IBSHIFT bits)
-  // LNX  CMSPAR  = mark/space parity
+  // LNX  CIBAUD  = mask for input speeds (CBAUD-like, shifted left IBSHIFT
+  // bits) LNX  CMSPAR  = mark/space parity
   tios.c_cflag &= ~(CBAUD | CBAUDEX);
   tios.c_cflag &= ~((CBAUD | CBAUDEX) << IBSHIFT);
   tios.c_cflag |= BOTHER | (BOTHER << IBSHIFT); // BOTHER=CBAUDEX
@@ -206,9 +200,10 @@ open_serial_dev(const char* path, uint32_t baud)
   tios.c_lflag = 0;
 
   // mode: MIN=0 TIME=0:
-  //  minimum of either the number of bytes requested or the number of bytes currently
-  //  available is returned without waiting for more bytes to be input. If no characters are
-  //  available, read returns a value of zero, having read no data.
+  //  minimum of either the number of bytes requested or the number of bytes
+  //  currently available is returned without waiting for more bytes to be
+  //  input. If no characters are available, read returns a value of zero,
+  //  having read no data.
   tios.c_cc[VMIN] = 0;
   tios.c_cc[VTIME] = 0;
 
@@ -216,12 +211,8 @@ open_serial_dev(const char* path, uint32_t baud)
   tios.c_ispeed = speed;
 
   if (ioctl(fd, TCSETS2, &tios) == -1) {
-    fprintf(stderr,
-            "%s: failed to set tty attrs for %s: %s (%d)\n",
-            opts.self,
-            path,
-            strerror(errno),
-            errno);
+    fprintf(stderr, "%s: failed to set tty attrs for %s: %s (%d)\n", opts.self,
+            path, strerror(errno), errno);
     goto error;
   }
 
@@ -259,13 +250,12 @@ error:
   return -1;
 }
 
-static enum find_status
-find_serial_device_enumerative(const char* needle, int* fd, uint32_t baud)
-{
-  DIR* dir;
-  struct dirent* ent;
-  char sys_dev_path[PATH_MAX], *real_dev_path, *walk, serial_path[PATH_MAX], serial_no[128],
-    tty_path[PATH_MAX];
+static enum find_status find_serial_device_enumerative(const char *needle,
+                                                       int *fd, uint32_t baud) {
+  DIR *dir;
+  struct dirent *ent;
+  char sys_dev_path[PATH_MAX], *real_dev_path, *walk, serial_path[PATH_MAX],
+      serial_no[128], tty_path[PATH_MAX];
   int serial_fd;
   ssize_t r;
   bool match;
@@ -273,8 +263,8 @@ find_serial_device_enumerative(const char* needle, int* fd, uint32_t baud)
   match = false;
 
   if (!(dir = opendir("/sys/class/tty"))) {
-    fprintf(
-      stderr, "%s: failed to open /sys/class/tty: %s (%d)\n", opts.self, strerror(errno), errno);
+    fprintf(stderr, "%s: failed to open /sys/class/tty: %s (%d)\n", opts.self,
+            strerror(errno), errno);
     exit(1);
   }
 
@@ -283,15 +273,12 @@ find_serial_device_enumerative(const char* needle, int* fd, uint32_t baud)
       continue;
     }
     // okay, we have some kind of TTY
-    snprintf(sys_dev_path, sizeof sys_dev_path, "/sys/class/tty/%s", ent->d_name);
+    snprintf(sys_dev_path, sizeof sys_dev_path, "/sys/class/tty/%s",
+             ent->d_name);
 
     if (!(real_dev_path = realpath(sys_dev_path, NULL))) {
-      fprintf(stderr,
-              "%s: failed to resolve %s: %s (%d)\n",
-              opts.self,
-              sys_dev_path,
-              strerror(errno),
-              errno);
+      fprintf(stderr, "%s: failed to resolve %s: %s (%d)\n", opts.self,
+              sys_dev_path, strerror(errno), errno);
       continue;
     }
 
@@ -300,7 +287,8 @@ find_serial_device_enumerative(const char* needle, int* fd, uint32_t baud)
     //   /sys/devices/pci0000:00/0000:00:02.1/0000:02:00.0/0000:03:0c.0/0000:09:00.0/usb1/1-1/1-1.4/
     //      1-1.4.2/1-1.4.2:1.0/ttyUSB0/tty/ttyUSB0
     //
-    // we start from the right, and walk upwards until we hit a directory with a 'serial' file
+    // we start from the right, and walk upwards until we hit a directory with a
+    // 'serial' file
 
     walk = strdup(real_dev_path);
 
@@ -316,41 +304,35 @@ find_serial_device_enumerative(const char* needle, int* fd, uint32_t baud)
         serial_fd = open(serial_path, O_RDONLY);
 #pragma GCC diagnostic pop
         if (serial_fd == -1) {
-          fprintf(stderr,
-                  "%s: failed to open %s: %s (%d)\n",
-                  opts.self,
-                  serial_path,
-                  strerror(errno),
-                  errno);
+          fprintf(stderr, "%s: failed to open %s: %s (%d)\n", opts.self,
+                  serial_path, strerror(errno), errno);
           break;
         }
         r = read(serial_fd, serial_no, sizeof serial_no);
         if (r == -1) {
-          fprintf(stderr,
-                  "%s: failed to read from %s: %s (%d)\n",
-                  opts.self,
-                  serial_path,
-                  strerror(errno),
-                  errno);
+          fprintf(stderr, "%s: failed to read from %s: %s (%d)\n", opts.self,
+                  serial_path, strerror(errno), errno);
           close(serial_fd);
           break;
         }
         close(serial_fd);
 
-        char* p = strchr(serial_no, '\n');
+        char *p = strchr(serial_no, '\n');
         if (p)
           *p = '\0';
 
         snprintf(tty_path, sizeof tty_path, "/dev/%s", ent->d_name);
         if (!needle) {
-          host_printf(
-            DBG_MIN, HOST "Found matching serial device: %s, serial no. %s\n", tty_path, serial_no);
+          host_printf(DBG_MIN,
+                      HOST "Found matching serial device: %s, serial no. %s\n",
+                      tty_path, serial_no);
           match = true;
         } else if (!strcmp(serial_no, needle)) {
-          host_printf(DBG_MIN, HOST "Found matching serial device: %s\n", tty_path);
+          host_printf(DBG_MIN, HOST "Found matching serial device: %s\n",
+                      tty_path);
           match = true;
         }
-        if(match) {
+        if (match) {
           break;
         }
       }
@@ -362,7 +344,7 @@ find_serial_device_enumerative(const char* needle, int* fd, uint32_t baud)
 
   closedir(dir);
 
-  if(!match)
+  if (!match)
     return FIND_NXDEV;
 
   r = open_serial_dev(tty_path, baud);
@@ -374,9 +356,8 @@ find_serial_device_enumerative(const char* needle, int* fd, uint32_t baud)
   }
 }
 
-static enum find_status
-find_serial_device_with_path(const char* dev, int* fd, uint32_t baud)
-{
+static enum find_status find_serial_device_with_path(const char *dev, int *fd,
+                                                     uint32_t baud) {
   int r;
   struct stat buf;
 
@@ -399,9 +380,7 @@ find_serial_device_with_path(const char* dev, int* fd, uint32_t baud)
   }
 }
 
-enum find_status
-find_serial_device(const char* dev, int* fd, uint32_t baud)
-{
+enum find_status find_serial_device(const char *dev, int *fd, uint32_t baud) {
   if (!dev) {
     return find_serial_device_enumerative(NULL, fd, baud);
   } else if (*dev == '@') {
@@ -411,11 +390,134 @@ find_serial_device(const char* dev, int* fd, uint32_t baud)
   }
 }
 
-enum reset_status
-reset_tianleboard(int fd)
-{
-  struct usbdevfs_ctrltransfer ctrl;
-  fprintf(stderr, "Tianleboard reset: Not currently supported on Linux\n");
+int read_uint(const char *path) {
+  int fd;
+  ssize_t s;
+  unsigned long out;
+  char buf[17], *endptr;
+  
+  fd = open(path, O_RDONLY);
+  if(-1 == fd) {
+    fprintf(stderr, "%s: failed to open %s: %s (%d)\n", opts.self, path, strerror(errno), errno);
+    return -1;
+  }
+  s = read(fd, buf, sizeof buf - 1);
+  if(-1 == s) {
+    fprintf(stderr, "%s: failed to read %s: %s (%d)\n", opts.self, path, strerror(errno), errno);
+    return -1;
+  }
+  buf[s] = 0;
+  close(fd);
+
+  out = strtoul(buf, &endptr, 0);
+  if(!isdigit(*buf) || *endptr != '\n') {
+    fprintf(stderr, "%s: failed to parse %s: string <%s> is not a valid number\n", opts.self, path, buf);
+    return -1;
+  }
+
+  if(out > 999) {
+    fprintf(stderr, "%s: failed to parse %s: string <%s> is out-of-range\n", opts.self, path, buf);
+    return -1;
+  }
+
+  return (int)out;
 }
+
+enum reset_status reset_tianleboard(int serial_fd) {
+  struct usbdevfs_ctrltransfer ctrl;
+  int r, fd, busnum, devnum;
+  struct timespec req, rem;
+  size_t max_trial_path;
+  char pathbuf[PATH_MAX], *walk, *busnum_path, *devnum_path;
+  struct stat serial_stat;
+
+  if(-1 == fstat(fd, &serial_stat)) {
+    fprintf(stderr, "%s: fstat failed on %s: %s (%d)\n", opts.self, opts.dev_path, strerror(errno), errno);
+    return RS_FAIL;
+  }
+
+  snprintf(pathbuf, PATH_MAX, "/sys/dev/char/%d:%d", major(serial_stat.st_rdev), minor(serial_stat.st_rdev));
+
+  walk = realpath(pathbuf, NULL);
+  if(!walk) {
+    fprintf(stderr, "%s: realpath failed on %s: %s (%d)\n", opts.self, pathbuf, strerror(errno), errno);
+    return RS_FAIL;
+  }
+
+  max_trial_path = strlen(walk) + /* "/???num\0" */ 8;
+  busnum_path = malloc(max_trial_path);
+  devnum_path = malloc(max_trial_path);
+  assert(busnum_path);
+
+  busnum = devnum = -1;
+
+  while(1) {
+    walk = dirname(walk);
+    if(!strcmp(walk, "/"))
+      break;
+    snprintf(busnum_path, max_trial_path, "%s/busnum", walk);
+    snprintf(devnum_path, max_trial_path, "%s/devnum", walk);
+    if(!access(busnum_path, F_OK) && !access(devnum_path, F_OK)) {
+      busnum = read_uint(busnum_path);
+      if(busnum == -1)
+        return RS_FAIL;
+
+      devnum = read_uint(devnum_path);
+      if(devnum == -1)
+        return RS_FAIL;
+
+      break;
+    }
+  }
+
+  free(busnum_path);
+  free(walk);
+
+  if(busnum == -1 && devnum == -1)
+    return RS_FAIL;
+  assert(busnum != -1 && devnum != -1);
+
+  snprintf(pathbuf, PATH_MAX, "/dev/bus/usb/%03d/%03d", busnum, devnum);
+  fd = open(pathbuf, O_RDWR);
+
+  ctrl.bRequestType = USB_DIR_OUT | USB_TYPE_VENDOR | USB_RECIP_DEVICE;
+  ctrl.bRequest = 0xff;
+  ctrl.wValue = 0x37e1;
+  ctrl.wIndex = 0x0001;
+  ctrl.data = NULL;
+  ctrl.wLength = 0;
+  ctrl.timeout = 1000;
+
+  if (ioctl(fd, USBDEVFS_CONTROL, &ctrl) == -1) {
+    fprintf(stderr, "%s: low-latch transfer failed: %s (%d)\n", opts.self,
+            strerror(errno), errno);
+    return RS_FAIL;
+  }
+
+  req.tv_sec = 0;
+  req.tv_nsec = 10'000'000; // 10ms
+  while (nanosleep(&req, &rem) == -1 && errno == EINTR)
+    req = rem;
+
+  ctrl.bRequestType = USB_DIR_OUT | USB_TYPE_VENDOR | USB_RECIP_DEVICE;
+  ctrl.bRequest = 0xff;
+  ctrl.wValue = 0x37e1;
+  ctrl.wIndex = 0x0101;
+  ctrl.data = NULL;
+  ctrl.wLength = 0;
+  ctrl.timeout = 1000;
+  if (ioctl(fd, USBDEVFS_CONTROL, &ctrl) == -1) {
+    fprintf(stderr, "%s: high-latch transfer failed: %s (%d)\n", opts.self,
+            strerror(errno), errno);
+    return RS_FAIL;
+  }
+
+  close(fd);
+
+  return RS_OK;
+}
+
+
+
 
 #endif
