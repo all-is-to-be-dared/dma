@@ -5,7 +5,6 @@
 #include <generic/printf.h>
 
 #include <pup/xz-embedded/xz.h>
-#include <pup/xz_config.h>
 
 #include <bcm2835/platform.h>
 #include <generic/assert.h>

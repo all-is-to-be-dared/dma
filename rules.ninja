@@ -21,6 +21,7 @@
 
 
 
+# For ANSI colors.
 include util.ninja
 
 
@@ -28,9 +29,13 @@ include util.ninja
 
 # --------------------------------------------------------------------------------------------------
 # GENERIC
-cc = /opt/homebrew/opt/llvm@23/bin/clang
-ld = ld.lld
-objcopy = /opt/homebrew/opt/llvm@23/bin/llvm-objcopy
+# cc = /opt/homebrew/opt/llvm@23/bin/clang
+cc = clang-24
+# ld = ld.lld
+ld = ld.lld-24
+# objcopy = /opt/homebrew/opt/llvm@23/bin/llvm-objcopy
+objcopy = llvm-objcopy-24
+ar = llvm-ar-24
 
 
 
@@ -44,6 +49,7 @@ objcopy = /opt/homebrew/opt/llvm@23/bin/llvm-objcopy
 # arm_ld = arm-none-eabi-ld
 arm_cc = ${cc}
 arm_ld = ${ld}
+arm_ar = ${ar}
 arm_objcopy = ${objcopy}
 # Compiler-specific flags.
 #
@@ -58,10 +64,10 @@ arm_objcopy = ${objcopy}
 #
 #     -nostartfiles
 # 
-#arm_cc_explicit = --target=arm-none-eabi --sysroot /usr/lib/arm-none-eabi -fshort-enums
-arm_cc_explicit = --target=arm-none-eabi -fshort-enums $
-                  --sysroot /Applications/ArmGNUToolchain/15.2.rel1/arm-none-eabi/bin/../arm-none-eabi $
-                  --gcc-install-dir=/Applications/ArmGNUToolchain/15.2.rel1/arm-none-eabi/lib/gcc/arm-none-eabi/15.2.1
+arm_cc_explicit = --target=arm-none-eabi --sysroot /usr/lib/arm-none-eabi -fshort-enums
+# arm_cc_explicit = --target=arm-none-eabi -fshort-enums $
+#                   --sysroot /Applications/ArmGNUToolchain/15.2.rel1/arm-none-eabi/bin/../arm-none-eabi $
+#                   --gcc-install-dir=/Applications/ArmGNUToolchain/15.2.rel1/arm-none-eabi/lib/gcc/arm-none-eabi/15.2.1
 # arm_cc_explicit = -nostartfiles
 
 
@@ -76,35 +82,39 @@ arm_ldflags    = -z noexecstack --gc-sections -static
 
 # params: cflags_ext
 rule arm_cc
-  command = ${arm_cc} -MD -MF ${out}.d ${arm_cflags} ${cflags_ext} -D_CFLAGS_="\"${arm_cflags} ${cflags_ext}\"" -c ${in} -o ${out}
+  command = ${arm_cc} -MD -MF ${out}.d ${arm_cflags} ${cflags_ext} -DCAPTURED_CFLAGS="\"${arm_cflags} ${cflags_ext}\"" -c ${in} -o ${out}
   deps = gcc
   depfile = ${out}.d
   description = ${_green}[ARM_CC]${_reset} ${out}
 
 rule arm_mklib
-  command = llvm-ar rcs ${out} ${in}
-  description = ${_green}[ARMAR]${_reset} ${out}
+  command = ${arm_ar} rcs ${out} ${in}
+  description = ${_green}[ARM_AR]${_reset} ${out}
 
 # params: ldflags_ext
 rule arm_link
   command = ${arm_ld} ${arm_ldflags} ${ldflags_ext} ${in} ${libs} -o ${out}
-  description = ${_green}[ARMLD]${_reset} ${out}
+  description = ${_green}[ARM_LD]${_reset} ${out}
 
 rule arm_objcopy
   command = ${arm_objcopy} -O binary ${in} ${out}
-  description = ${_green}[ARMOCP]${_reset} ${out}
+  description = ${_green}[ARM_OCP]${_reset} ${out}
 
 rule pi-install
   command = bin/pi-install ${in}
   description = ${_green}[PI-INSTALL]${_reset} ${in}
 
+rule pup
+  command = bin/pup ${in}
+  description = ${_green}[PUP]${_reset} ${in}
+
 rule arm_xz
   command = xz --arm -k --threads=1 -9 --check=crc32 --lzma2=dict=1Mi $in -c > $out
-  description = ${_green}[ARMXZ]${_reset} ${out}
+  description = ${_green}[ARM_XZ]${_reset} ${out}
 
 rule arm_mergelibs
   command = scripts/mergelibs.mri.sh ${out} ${in} | arm-none-eabi-ar -M
-  description = ${_green}[ARMAR_MRI]${_reset} ${out} < ${in}
+  description = ${_green}[ARM_MERGELIBS]${_reset} ${out} < ${in}
 
 
 
@@ -132,11 +142,11 @@ rule host_cc
   command = ${host_cc} -MD -MF ${out}.d ${host_cflags} ${cflags_ext} -c ${in} -o ${out}
   deps = gcc
   depfile = ${out}.d
-  description = ${_magenta}[HOSTCC]${_reset} ${out}
+  description = ${_magenta}[HOST_CC]${_reset} ${out}
 
 rule host_link
   command = ${host_ld} ${host_ldflags} ${ldflags_ext} ${in} ${libs} -o ${out}
-  description = ${_magenta}[HOSTLD]${_reset} ${out}
+  description = ${_magenta}[HOST_LD]${_reset} ${out}
 
 
 
@@ -144,6 +154,3 @@ rule host_link
 # --------------------------------------------------------------------------------------------------
 # MISC. UTILITIES
 
-rule mkdir
-  command = mkdir -p ${out}
-  description = ${_cyan}[MKDIR]${_reset} ${out}

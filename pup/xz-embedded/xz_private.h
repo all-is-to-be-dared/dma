@@ -55,7 +55,7 @@
 	 * macros and functions. This makes it easier to adapt the code into
 	 * different environments and avoids clutter in the Linux kernel tree.
 	 */
-#	include "pup/xz_config.h"
+#	include "xz_config.h"
 #endif
 
 /* If no specific decoding mode is requested, enable support for all modes. */

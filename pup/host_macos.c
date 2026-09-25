@@ -1,10 +1,3 @@
-#include <CoreFoundation/CFBase.h>
-#include <CoreFoundation/CFDictionary.h>
-#include <CoreFoundation/CFPlugInCOM.h>
-#include <CoreFoundation/CFUUID.h>
-#include <IOKit/IOTypes.h>
-#include <IOKit/usb/IOUSBHostFamilyDefinitions.h>
-#include <IOKit/usb/USB.h>
 #ifdef __APPLE__
 
 #include <unistd.h>
@@ -20,6 +13,10 @@
 #include <mach/mach_error.h>
 
 #include <CoreFoundation/CoreFoundation.h>
+#include <CoreFoundation/CFBase.h>
+#include <CoreFoundation/CFDictionary.h>
+#include <CoreFoundation/CFPlugInCOM.h>
+#include <CoreFoundation/CFUUID.h>
 #include <IOKit/IOKitLib.h>
 #include <IOKit/IOCFPlugIn.h>
 #include <IOKit/serial/IOSerialKeys.h>
@@ -27,6 +24,9 @@
 #include <IOKit/usb/USBSpec.h>
 #include <IOKit/usb/IOUSBLib.h>
 #include <IOKit/IOBSD.h>
+#include <IOKit/IOTypes.h>
+#include <IOKit/usb/IOUSBHostFamilyDefinitions.h>
+#include <IOKit/usb/USB.h>
 
 #include "pup/host.h"
 #include "pup/common.h"

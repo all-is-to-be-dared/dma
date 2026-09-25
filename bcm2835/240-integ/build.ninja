@@ -1,0 +1,39 @@
+c = bcm2835/240-integ/
+
+
+
+
+# -------------------------------------------------------------------------------------------------
+# COMMON SOURCES
+
+build $c/hash.o: arm_cc $c/hash.c
+
+
+
+
+# -------------------------------------------------------------------------------------------------
+# TARGET: 1-timing
+
+build $c/1-timing.elf.xz: arm_xz $c/1-timing.elf
+build $c/1-timing.elf: arm_link $c/1-timing.o $c/hash.o bcm2835/libplatform.a bcm2835/libc.a $
+                       | bcm2835/common.ld
+  ldflags_ext = -Tbcm2835/common.ld
+  libs = bcm2835/libgcc.a
+build $c/1-timing.o: arm_cc $c/1-timing.c
+
+default $c/1-timing.elf.xz
+
+
+
+
+# -------------------------------------------------------------------------------------------------
+# TARGET: 2-integ
+
+build $c/2-integ.elf.xz: arm_xz $c/2-integ.elf
+build $c/2-integ.elf: arm_link $c/2-integ.o $c/hash.o bcm2835/libplatform.a bcm2835/libc.a $
+                      | bcm2835/common.ld
+  ldflags_ext = -Tbcm2835/common.ld
+  libs = bcm2835/libgcc.a
+build $c/2-integ.o: arm_cc $c/2-integ.c
+
+default $c/2-integ.elf.xz

@@ -16,7 +16,8 @@ include rules.ninja
 # Then, we pull in all the subprojects. We use `include` instead of `subninja` so that
 # cross-project dependencies work properly.
 
-# bcm2835/ is the subproject that deals with platform support for the BCM2835 SoC.
+# bcm2835/ is the subproject that deals with platform support for the BCM2835 SoC, and contains
+#          programs to be run on the BCM2835
 subninja bcm2835/build.ninja
 
 # pup/ is the subproject that deals with the Program UPloader (PUP). This includes board-specific

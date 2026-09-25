@@ -2,19 +2,46 @@
 # TARGET: bcm2835/libplatform.a
 
 build bcm2835/libplatform.a: arm_mklib $
-  bcm2835/init.o bcm2835/pwrman.o bcm2835/uart.o bcm2835/gpio.o $
-  bcm2835/printf.o bcm2835/systmr.o bcm2835/ptags.o bcm2835/extra.o $
-  bcm2835/backtrace.o bcm2835/mmu.o
-build bcm2835/init.o: arm_cc bcm2835/init.c
-build bcm2835/pwrman.o: arm_cc bcm2835/pwrman.c
-build bcm2835/uart.o: arm_cc bcm2835/uart.c
-build bcm2835/gpio.o: arm_cc bcm2835/gpio.c
-build bcm2835/systmr.o: arm_cc bcm2835/systmr.c
-build bcm2835/ptags.o: arm_cc bcm2835/ptags.c
-build bcm2835/extra.o: arm_cc bcm2835/extra.c
-build bcm2835/printf.o: arm_cc printf/printf.c
-  # cflags_ext = -DPRINTF_DISABLE_SUPPORT_FLOAT=0
-build bcm2835/backtrace.o: arm_cc generic/backtrace.c
-build bcm2835/mmu.o: arm_cc bcm2835/mmu.c
+  build/bcm2835/platform/init.o build/bcm2835/platform/pwrman.o $
+  build/bcm2835/platform/uart.o build/bcm2835/platform/gpio.o $
+  build/bcm2835/platform/printf.o build/bcm2835/platform/systmr.o $
+  build/bcm2835/platform/ptags.o build/bcm2835/platform/extra.o $
+  build/bcm2835/platform/backtrace.o build/bcm2835/platform/mmu.o
+
+build build/bcm2835/platform/init.o: arm_cc bcm2835/init.c
+build build/bcm2835/platform/pwrman.o: arm_cc bcm2835/pwrman.c
+build build/bcm2835/platform/uart.o: arm_cc bcm2835/uart.c
+build build/bcm2835/platform/gpio.o: arm_cc bcm2835/gpio.c
+build build/bcm2835/platform/systmr.o: arm_cc bcm2835/systmr.c
+build build/bcm2835/platform/ptags.o: arm_cc bcm2835/ptags.c
+build build/bcm2835/platform/extra.o: arm_cc bcm2835/extra.c
+build build/bcm2835/platform/mmu.o: arm_cc bcm2835/mmu.c
+
+build build/bcm2835/platform/backtrace.o: arm_cc generic/backtrace.c
+
+build build/bcm2835/platform/printf.o: arm_cc printf/printf.c
 
 default bcm2835/libplatform.a
+
+
+
+
+# -------------------------------------------------------------------------------------------------
+# TARGET: bcm2835/libsanrt.a
+
+build bcm2835/libsanrt.a: arm_mklib $
+  build/bcm2835/sanrt/ubsan.o
+build build/bcm2835/sanrt/ubsan.o: arm_cc generic/ubsan.c
+
+default bcm2835/libsanrt.a
+
+
+
+
+# --------------------------------------------------------------------------------------------------
+# All executable targets
+
+# subninja bcm2835/240-superopt/build.ninja
+subninja bcm2835/240-integ/build.ninja
+# subninja bcm2835/240-ubsan/build.ninja
+# subninja bcm2835/010-dma/build.ninja

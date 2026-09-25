@@ -56,7 +56,7 @@ extern opts_t opts;
 #define host_printf(lev, ...) do { if(opts.debug >= lev) __host_printf(__VA_ARGS__); } while (0)
 
 static inline void __host_printf(const char *fmt, ...) {
-  va_list ap;
+  __builtin_va_list ap;
   __builtin_va_start(ap, fmt);
   vprintf(fmt, ap);
   __builtin_va_end(ap);

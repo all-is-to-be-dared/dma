@@ -1,20 +1,21 @@
 # -------------------------------------------------------------------------------------------------
 # XZ-EMBEDDED
 
-d = pup/xz-embedded/
+d = build/bcm2835/pup/
+s = pup/xz-embedded/
 
-xz_cflags = -I$d -DXZ_DEC_PREALLOC=1 -DXZ_DEC_BCJ=1
+xz_cflags = -I$s -DXZ_DEC_PREALLOC=1 -DXZ_DEC_BCJ=1
 
-build ${d}/libxz_embedded.bcm2835.a: arm_mklib ${d}/xz_crc32.bcm2835.o $
-  ${d}/xz_dec_stream.bcm2835.o ${d}/xz_dec_lzma2.bcm2835.o ${d}/xz_dec_bcj.bcm2835.o
+build ${d}/libxz_embedded.a: arm_mklib ${d}/xz_crc32.o $
+  ${d}/xz_dec_stream.o ${d}/xz_dec_lzma2.o ${d}/xz_dec_bcj.o
 
-build ${d}/xz_crc32.bcm2835.o: arm_cc ${d}/xz_crc32.c
+build ${d}/xz_crc32.o: arm_cc ${s}/xz_crc32.c
   cflags_ext = ${xz_cflags}
-build ${d}/xz_dec_stream.bcm2835.o: arm_cc ${d}/xz_dec_stream.c
+build ${d}/xz_dec_stream.o: arm_cc ${s}/xz_dec_stream.c
   cflags_ext = ${xz_cflags}
-build ${d}/xz_dec_lzma2.bcm2835.o: arm_cc ${d}/xz_dec_lzma2.c
+build ${d}/xz_dec_lzma2.o: arm_cc ${s}/xz_dec_lzma2.c
   cflags_ext = ${xz_cflags}
-build ${d}/xz_dec_bcj.bcm2835.o: arm_cc ${d}/xz_dec_bcj.c
+build ${d}/xz_dec_bcj.o: arm_cc ${s}/xz_dec_bcj.c
   cflags_ext = ${xz_cflags} -DXZ_DEC_ARM=1
 
-default ${d}/libxz_embedded.bcm2835.a
+default ${d}/libxz_embedded.a
