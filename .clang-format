@@ -1,3 +1,4 @@
+Standard: c++23
 BasedOnStyle: Mozilla
 SortIncludes: false
 ColumnLimit: 100

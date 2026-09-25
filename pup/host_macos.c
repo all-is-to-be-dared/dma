@@ -1,8 +1,17 @@
+#include <CoreFoundation/CFBase.h>
+#include <CoreFoundation/CFDictionary.h>
+#include <CoreFoundation/CFPlugInCOM.h>
+#include <CoreFoundation/CFUUID.h>
+#include <IOKit/IOTypes.h>
+#include <IOKit/usb/IOUSBHostFamilyDefinitions.h>
+#include <IOKit/usb/USB.h>
 #ifdef __APPLE__
 
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
+#include <sys/fcntl.h>
+#include <sys/param.h>
 #include <errno.h>
 #include <termios.h>
 #define _POSIX_C_SOURCE 199309L
@@ -12,9 +21,11 @@
 
 #include <CoreFoundation/CoreFoundation.h>
 #include <IOKit/IOKitLib.h>
+#include <IOKit/IOCFPlugIn.h>
 #include <IOKit/serial/IOSerialKeys.h>
 #include <IOKit/serial/ioss.h>
 #include <IOKit/usb/USBSpec.h>
+#include <IOKit/usb/IOUSBLib.h>
 #include <IOKit/IOBSD.h>
 
 #include "pup/host.h"
@@ -29,7 +40,7 @@ static struct termios orig_termios;
 
 
 static int
-open_serial_dev(const char* path, uint32_t baud)
+open_serial_dev(const char *path, uint32_t baud)
 {
   int fd;
   struct termios tios;
@@ -239,7 +250,7 @@ error:
 
 
 static kern_return_t
-discover_serial_ports(io_iterator_t* matching_services)
+discover_serial_ports(io_iterator_t *matching_services)
 {
   kern_return_t kr;
   CFMutableDictionaryRef matching_dict;
@@ -265,7 +276,7 @@ discover_serial_ports(io_iterator_t* matching_services)
 
 
 static enum find_status
-find_serial_device_auto(int* fd, uint32_t baud)
+find_serial_device_auto(int *fd, uint32_t baud)
 {
   // Enumeration behavior: the first serial modem that is also a IOUSBHostDevice
 
@@ -340,7 +351,7 @@ find_serial_device_auto(int* fd, uint32_t baud)
 
 
 static enum find_status
-find_serial_device_fuzzy(const char* string, int* fd, uint32_t baud)
+find_serial_device_fuzzy(const char *string, int *fd, uint32_t baud)
 {
   io_iterator_t iter;
   char pbuf[PATH_MAX], serialbuf[128];
@@ -370,7 +381,7 @@ find_serial_device_fuzzy(const char* string, int* fd, uint32_t baud)
           if (curr != service)
             (void)IOObjectRelease(curr);
           curr = next;
-          if (IOObjectConformsTo(curr, "IOUSBHostDevice")) {
+          if (IOObjectConformsTo(curr, kIOUSBHostDeviceClassName)) {
             device = curr;
             break;
           }
@@ -414,7 +425,7 @@ find_serial_device_fuzzy(const char* string, int* fd, uint32_t baud)
 
 
 static enum find_status
-find_serial_device_with_path(const char* dev, int* fd, uint32_t baud)
+find_serial_device_with_path(const char *dev, int *fd, uint32_t baud)
 {
   int r;
   struct stat buf;
@@ -442,7 +453,7 @@ find_serial_device_with_path(const char* dev, int* fd, uint32_t baud)
 
 
 enum find_status
-find_serial_device(const char* dev, int* fd, uint32_t baud)
+find_serial_device(const char *dev, int *fd, uint32_t baud)
 {
   if (!dev) {
     return find_serial_device_auto(fd, baud);
@@ -451,6 +462,153 @@ find_serial_device(const char* dev, int* fd, uint32_t baud)
   } else {
     return find_serial_device_with_path(dev, fd, baud);
   }
+}
+
+
+
+
+enum reset_status
+reset_tianleboard(int fd)
+{
+  CFMutableDictionaryRef matching_dict;
+  kern_return_t kr;
+  char callup_path[MAXPATHLEN];
+  io_service_t serial_service;
+  io_registry_entry_t device, curr_device, next_device;
+  device = curr_device;
+
+  if (-1 == fcntl(fd, F_GETPATH, callup_path)) {
+    fprintf(stderr,
+            "%s: failed to get path to serial device: %s (%d)\n",
+            opts.self,
+            strerror(errno),
+            errno);
+    return RS_FAIL;
+  }
+
+  matching_dict = IOServiceMatching(kIOSerialBSDServiceValue);
+  if (!matching_dict) {
+    fprintf(stderr, "IOServiceMatching returned a NULL dictionary.\n");
+    return KERN_FAILURE;
+  }
+  CFDictionarySetValue(
+    matching_dict,
+    CFSTR(kIOCalloutDeviceKey),
+    CFStringCreateWithCString(kCFAllocatorDefault, callup_path, kCFStringEncodingUTF8));
+
+  serial_service = IOServiceGetMatchingService(kIOMainPortDefault, matching_dict);
+  if (serial_service == IO_OBJECT_NULL) {
+    fprintf(stderr, "%s: device path %s not found in IOKit registry.\n", opts.self, callup_path);
+    return RS_FAIL;
+  }
+
+  curr_device = serial_service;
+
+  while (IORegistryEntryGetParentEntry(curr_device, kIOServicePlane, &next_device) ==
+         KERN_SUCCESS) {
+    if (curr_device != serial_service)
+      (void)IOObjectRelease(curr_device);
+    curr_device = next_device;
+    if (IOObjectConformsTo(curr_device, kIOUSBHostDeviceClassName)) {
+      device = curr_device;
+      break;
+    }
+  }
+
+  (void)IOObjectRelease(serial_service);
+
+  // perform control transfer
+
+  IOCFPlugInInterface **plugin_interface = NULL;
+  IOUSBDeviceInterface320 **device_interface = NULL;
+  int32_t score;
+
+  kr = IOCreatePlugInInterfaceForService(
+    device, kIOUSBDeviceUserClientTypeID, kIOCFPlugInInterfaceID, &plugin_interface, &score);
+  if (kr != KERN_SUCCESS) {
+    fprintf(stderr,
+            "%s: IOCreatePlugInInterfaceForService: %s (%d)\n",
+            opts.self,
+            mach_error_string(kr),
+            kr);
+    return RS_FAIL;
+  }
+
+  HRESULT res = (*plugin_interface)
+                  ->QueryInterface(plugin_interface,
+                                   CFUUIDGetUUIDBytes(kIOUSBDeviceInterfaceID320),
+                                   (LPVOID *)&device_interface);
+  if(res != S_OK || !device_interface) {
+    fprintf(stderr, "%s: Failed to get device interface: %s (%d)\n", opts.self, mach_error_string(kr), kr);
+    return RS_FAIL;
+  }
+  kr = IODestroyPlugInInterface(plugin_interface);
+  assert(kr == KERN_SUCCESS);
+
+  kr = (*device_interface)->USBDeviceOpenSeize(device_interface);
+  if(kr != KERN_SUCCESS) {
+    fprintf(stderr, "%s: Could not seize USB device: %s (%d)\n", opts.self, mach_error_string(kr), kr);
+    (*device_interface)->Release(device_interface);
+    return RS_FAIL;
+  }
+
+  // #define CP210X_VENDOR_SPECIFIC 0xff
+  // #define CP210X_WRITE_LATCH 0x37e1
+  // #define GPIO0_MASK 0x0001
+  // #define GPIO0_HIGH 0x0101
+  // #define GPIO0_LOW 0x0001
+  // uint16_t wIndex = high ? GPIO0_HIGH : GPIO0_LOW;
+  // int rc = libusb_control_transfer(
+  //     cp210x_handle,
+  //     LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
+  //     CP210X_VENDOR_SPECIFIC,
+  //     CP210X_WRITE_LATCH,
+  //     wIndex,
+  //     NULL,
+  //     0,
+  //     1000);
+  // libusb_control_transfer (
+  //  libusb_device_handle *dev_handle,
+  //  uint8_t bmRequestType,
+  //  uint8_t bRequest,
+  //  uint16_t wValue,
+  //  uint16_t wIndex,
+  //  unsigned char *data,
+  //  uint16_t wLength,
+  //  unsigned int timeout)
+
+  IOUSBDevRequest req;
+
+  req.bmRequestType = USBmakebmRequestType(kUSBOut, kUSBVendor, kUSBDevice);
+  req.bRequest = 0xff; // cp210x vendor specific
+  req.wValue = 0x37e1; // cp210x write latch
+  req.wIndex = 0x0001; // GPIO0_LOW
+  req.pData = NULL;
+  req.wLength = 0;
+  kr = (*device_interface)->DeviceRequest(device_interface, &req);
+  if(kr != KERN_SUCCESS) {
+    fprintf(stderr, "%s: low-latch transfer failed: %s (%d)\n", opts.self, mach_error_string(kr), kr);
+    return RS_FAIL;
+  }
+
+  sleep(1);
+
+  req.bmRequestType = USBmakebmRequestType(kUSBOut, kUSBVendor, kUSBDevice);
+  req.bRequest = 0xff; // cp210x vendor specific
+  req.wValue = 0x37e1; // cp210x write latch
+  req.wIndex = 0x0101; // GPIO0_LOW
+  req.pData = NULL;
+  req.wLength = 0;
+  kr = (*device_interface)->DeviceRequest(device_interface, &req);
+  if(kr != KERN_SUCCESS) {
+    fprintf(stderr, "%s: low-latch transfer failed: %s (%d)\n", opts.self, mach_error_string(kr), kr);
+    return RS_FAIL;
+  }
+
+  (*device_interface)->USBDeviceClose(device_interface);
+  (*device_interface)->Release(device_interface);
+
+  return RS_OK;
 }
 
 

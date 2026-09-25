@@ -1,7 +1,7 @@
 #pragma once
 
 #include <stdint.h>
-#include <stdarg.h>
+// #include <stdarg.h>
 #include <stdio.h>
 
 enum find_status
@@ -44,6 +44,8 @@ typedef struct
   uint8_t retries;
 
   bool _print_usage;
+
+  bool reset_tianleboard;
 } opts_t;
 
 extern opts_t opts;
@@ -55,7 +57,17 @@ extern opts_t opts;
 
 static inline void __host_printf(const char *fmt, ...) {
   va_list ap;
-  va_start(ap, fmt);
+  __builtin_va_start(ap, fmt);
   vprintf(fmt, ap);
-  va_end(ap);
+  __builtin_va_end(ap);
 }
+
+
+
+
+enum reset_status {
+  RS_OK,
+  RS_FAIL,
+};
+
+enum reset_status reset_tianleboard(int fd);

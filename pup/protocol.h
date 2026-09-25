@@ -1,6 +1,6 @@
 #pragma once
 
-#include <stdlib.h>
+#include <stddef.h>
 #include <stdint.h>
 
 struct elf_boot_args {

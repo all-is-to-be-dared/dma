@@ -43,8 +43,7 @@ default pup/bcm2835
 
 build bin/pup: host_link $
   pup/host.o pup/host_macos.o pup/host_linux.o $
-  pup/fsm.host.o pup/crc.host.o pup/fcs.host.o $
-  | bin/
+  pup/fsm.host.o pup/crc.host.o pup/fcs.host.o
   cflags_ext = ${host_xz_lib}
   libs = -llzma ${pup_libs_host}
 build pup/host.o: host_cc pup/host.c

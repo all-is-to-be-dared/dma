@@ -13,6 +13,7 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <libgen.h>
+#include <linux/usbdevice_fs.h>
 
 #include "pup/host.h"
 #include "pup/common.h"
@@ -408,6 +409,13 @@ find_serial_device(const char* dev, int* fd, uint32_t baud)
   } else {
     return find_serial_device_with_path(dev, fd, baud);
   }
+}
+
+enum reset_status
+reset_tianleboard(int fd)
+{
+  struct usbdevfs_ctrltransfer ctrl;
+  fprintf(stderr, "Tianleboard reset: Not currently supported on Linux\n");
 }
 
 #endif

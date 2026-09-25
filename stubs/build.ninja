@@ -6,3 +6,15 @@ build stubs/blink.elf: arm_link stubs/blink.o
 build stubs/blink.o: arm_cc stubs/blink.S
 
 default stubs/blink.bin
+
+
+
+
+# -------------------------------------------------------------------------------------------------
+# TARGET: stubs/hang.bin
+
+build stubs/hang.elf.xz: arm_xz stubs/hang.elf
+build stubs/hang.elf: arm_link stubs/hang.o
+build stubs/hang.o: arm_cc stubs/hang.S
+
+default stubs/hang.elf.xz

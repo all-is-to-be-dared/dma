@@ -17,26 +17,14 @@ include rules.ninja
 # cross-project dependencies work properly.
 
 # bcm2835/ is the subproject that deals with platform support for the BCM2835 SoC.
-include bcm2835/build.ninja
+subninja bcm2835/build.ninja
 
 # pup/ is the subproject that deals with the Program UPloader (PUP). This includes board-specific
 # files, the host executable, and platform-specific host code.
-include pup/build.ninja
+subninja pup/build.ninja
 
 # stubs/ are minimal programs used as elementary tests for various other features.
-include stubs/build.ninja
+subninja stubs/build.ninja
 
 # libc/ contains libc-provided functionality that the embedded targets expect
-include libc/build.ninja
-
-
-
-
-# bcm2835-dma/ is the subproject that deals with DMA on the BCM2835
-include bcm2835-dma/build.ninja
-
-
-
-
-# Rule to make the bin/ directory.
-build bin/: mkdir
+subninja libc/build.ninja

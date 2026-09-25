@@ -7,6 +7,10 @@
 #define _CFLAGS_ ""
 #endif
 
+#if defined(__GNUC__) && !defined(__clang__)
+#define __GCC__ 1
+#endif
+
 /* Prevent the expression `ex` from being optimized away.
  */
 #define BLACK_BOX(ex)                     \
