@@ -197,3 +197,20 @@ ptag_get_dma_channel_mask(void)
 
   return tag.payload;
 }
+
+uint32_t ptag_get_measured_clock_rate(enum ptag_clock_id which_clock)
+{
+  struct
+  {
+    struct mbox_tag_hdr hdr;
+    uint32_t clock_id;
+    uint32_t clock_rate;
+  } tag = { .hdr = mk_tag_hdr(3, 0x47, 4), .clock_id = which_clock, .clock_rate = 0 };
+
+  if(!mail(ARM_TO_VC, &tag, sizeof tag))
+    panic("ptag_get_measured_clock_rate: failed to query measured clock rate for clock %d\n", which_clock);
+
+  assert(tag.hdr.code.is_response && tag.hdr.code.resp_size == 8);
+
+  return tag.clock_rate;
+}
