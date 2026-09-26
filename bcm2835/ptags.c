@@ -99,13 +99,16 @@ mail(enum mbox_chan channel, void* tag, size_t tagsz)
 
   __asm__ volatile("" ::: "memory");
 
+  // clean and invalidate dcache so that buffer is written out to L2
+  flush_entire_dcache();
+  // dsb to sync on the flush
   dsb();
-  while (mbox->status & MBOX_FULL)
+  while (mbox->status1 & MBOX_FULL)
     ;
-  mbox->write = writev;
-  while (mbox->status & MBOX_EMPTY)
+  mbox->write1 = writev;
+  while (mbox->status0 & MBOX_EMPTY)
     ;
-  readv = mbox->read;
+  readv = mbox->read0;
   dsb();
 
   __asm__ volatile("" ::: "memory");
@@ -198,6 +201,23 @@ ptag_get_dma_channel_mask(void)
   return tag.payload;
 }
 
+uint32_t ptag_get_nominal_clock_rate(enum ptag_clock_id which_clock)
+{
+  struct
+  {
+    struct mbox_tag_hdr hdr;
+    uint32_t clock_id;
+    uint32_t clock_rate;
+  } tag = { .hdr = mk_tag_hdr(3, 2, 8), .clock_id = which_clock, .clock_rate = 0 };
+
+  if(!mail(ARM_TO_VC, &tag, sizeof tag))
+    panic("ptag_get_nominal_clock_rate: failed to query measured clock rate for clock %d\n", which_clock);
+
+  assert(tag.hdr.code.is_response && tag.hdr.code.resp_size == 8);
+
+  return tag.clock_rate;
+}
+
 uint32_t ptag_get_measured_clock_rate(enum ptag_clock_id which_clock)
 {
   struct
@@ -205,7 +225,7 @@ uint32_t ptag_get_measured_clock_rate(enum ptag_clock_id which_clock)
     struct mbox_tag_hdr hdr;
     uint32_t clock_id;
     uint32_t clock_rate;
-  } tag = { .hdr = mk_tag_hdr(3, 0x47, 4), .clock_id = which_clock, .clock_rate = 0 };
+  } tag = { .hdr = mk_tag_hdr(3, 0x47, 8), .clock_id = which_clock, .clock_rate = 0 };
 
   if(!mail(ARM_TO_VC, &tag, sizeof tag))
     panic("ptag_get_measured_clock_rate: failed to query measured clock rate for clock %d\n", which_clock);

@@ -11,6 +11,8 @@ refer to UART). Currently features:
  - supports high baud rates (e.g. in the megabaud range)
  - supports LZMA2 + BCJ compression (via Tukaani's XZ-embedded)
  - supports both BIN and ELF formats
+ - supports arbitrary `core_freq` settings (automatically detected by pup/bcm2835.bin)
+ - supports reset-by-wire on: Tianleboard (use `-r` flag)
 
 PUP consists of two components, a host-side uploader (the eponymous `pup`), and a device-side
 downloader.
@@ -21,6 +23,11 @@ Device support:
 Host support:
  - macOS
  - Linux
+
+### Installing
+
+Prebuilt host-side binaries are available at `bin/pup.macos` or `bin/pup.linux`.
+Prebuilt device-side binary is available at `pup/bcm2835.bin`; just copy this in as your `kernel.img`.
 
 ### Building
 

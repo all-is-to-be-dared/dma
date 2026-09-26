@@ -138,7 +138,7 @@ main(struct elf_boot_args *boot_args)
 
   // -----------------------------------------------------------------------------------------------
 
-  printf("DONE.\n");
+  printf("\nDONE.\n");
   aux_uart_flush_tx_fifo();
 }
 

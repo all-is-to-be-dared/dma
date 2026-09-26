@@ -60,9 +60,10 @@ enum {
   MBOX_EMPTY = (1 << 30),
 };
 typedef union {
-  REG(0x00, io32, read);
-  REG(0x18, io32, status);
-  REG(0x20, io32, write);
+  REG(0x00, io32, read0);
+  REG(0x18, io32, status0);
+  REG(0x20, io32, write1);
+  REG(0x28, io32, status1);
 } hw_mbox_t;
 [[maybe_unused]]
 static hw_mbox_t *mbox = (hw_mbox_t*)MBOX_BASE;

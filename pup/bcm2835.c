@@ -1,3 +1,4 @@
+#include "bcm2835/ptags.h"
 #include "elf.h"
 #include <inttypes.h>
 #include <string.h>
@@ -492,7 +493,11 @@ void main(void) {
   gpio_pin_set_function(15, FSEL_ALT5);
   gpio_pin_set_function(47, FSEL_OUTP);
 
-  aux_uart_init(BAUD_RATE, 400'000'000);
+  aux_uart_init(
+    BAUD_RATE,
+    // adapt to the current core clock rate; I think you want nominal here rather than measured
+    // the :250'000'000 is probably mostly my own paranoia
+    ptag_get_nominal_clock_rate(PCID_CORE) ?: 250'000'000);
 
   xz_crc32_init();
 

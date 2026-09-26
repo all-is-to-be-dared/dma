@@ -34,6 +34,25 @@ enum ptag_clock_id
   PCID_EMMC2 = 12,
   PCID_M2MC = 13,
   PCID_PIXEL_BVB = 14,
+  PCID_CLOCK_COUNT
+};
+static const char * PTAG_CLOCK_NAMES[] =
+{
+  [PCID_RESERVED] = "RESERVED",
+  [PCID_EMMC] = "EMMC",
+  [PCID_UART] = "UART",
+  [PCID_ARM] = "ARM",
+  [PCID_CORE] = "CORE",
+  [PCID_V3D] = "V3D",
+  [PCID_H264] = "H264",
+  [PCID_ISP] = "ISP",
+  [PCID_SDRAM] = "SDRAM",
+  [PCID_PIXEL] = "PIXEL",
+  [PCID_PWM]  = "PWM ",
+  [PCID_HEVC]  = "HEVC ",
+  [PCID_EMMC2]  = "EMMC2 ",
+  [PCID_M2MC]  = "M2MC ",
+  [PCID_PIXEL_BVB]  = "PIXEL_BVB ",
 };
 
 uint32_t
