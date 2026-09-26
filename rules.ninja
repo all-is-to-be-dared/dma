@@ -29,13 +29,10 @@ include util.ninja
 
 # --------------------------------------------------------------------------------------------------
 # GENERIC
-# cc = /opt/homebrew/opt/llvm@23/bin/clang
-cc = clang-24
-# ld = ld.lld
-ld = ld.lld-24
-# objcopy = /opt/homebrew/opt/llvm@23/bin/llvm-objcopy
-objcopy = llvm-objcopy-24
-ar = llvm-ar-24
+cc = clang
+ld = ld.lld
+objcopy = llvm-objcopy
+ar = llvm-ar
 
 
 
@@ -64,10 +61,10 @@ arm_objcopy = ${objcopy}
 #
 #     -nostartfiles
 # 
-arm_cc_explicit = --target=arm-none-eabi --sysroot /usr/lib/arm-none-eabi -fshort-enums
-# arm_cc_explicit = --target=arm-none-eabi -fshort-enums $
-#                   --sysroot /Applications/ArmGNUToolchain/15.2.rel1/arm-none-eabi/bin/../arm-none-eabi $
-#                   --gcc-install-dir=/Applications/ArmGNUToolchain/15.2.rel1/arm-none-eabi/lib/gcc/arm-none-eabi/15.2.1
+# arm_cc_explicit = --target=arm-none-eabi --sysroot /usr/lib/arm-none-eabi -fshort-enums
+arm_cc_explicit = --target=arm-none-eabi -fshort-enums $
+                  --sysroot /Applications/ArmGNUToolchain/15.2.rel1/arm-none-eabi/bin/../arm-none-eabi $
+                  --gcc-install-dir=/Applications/ArmGNUToolchain/15.2.rel1/arm-none-eabi/lib/gcc/arm-none-eabi/15.2.1
 # arm_cc_explicit = -nostartfiles
 
 
@@ -128,6 +125,7 @@ host_cc = ${cc}
 host_ld = ${cc}
 host_cc_explicit = -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk $
   -resource-dir /opt/homebrew/opt/llvm/lib/clang/23/
+host_ld_explicit =
 
 
 
@@ -136,7 +134,7 @@ host_cc_explicit = -isysroot /Applications/Xcode.app/Contents/Developer/Platform
 # HOST COMPILER RULES
 
 host_cflags = -std=c2y -O2 -I. -march=native ${host_cc_explicit}
-host_ldflags = -static
+host_ldflags = ${host_ld_explicit}
 
 rule host_cc
   command = ${host_cc} -MD -MF ${out}.d ${host_cflags} ${cflags_ext} -c ${in} -o ${out}

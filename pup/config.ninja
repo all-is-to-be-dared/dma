@@ -16,7 +16,7 @@
 # this unless your XZ is installed in a weird place and the compiler can't find it.
 
 host_xz_incl = -I/opt/homebrew/opt/xz/include/
-host_xz_lib  = -L/opt/homebrew/opt/xz/lib/
+host_xz_lib  = /opt/homebrew/opt/xz/lib/liblzma.a
 
 
 

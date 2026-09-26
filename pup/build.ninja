@@ -51,9 +51,8 @@ builddir = build/host/pup/
 
 build bin/pup: host_link $
   ${builddir}/host.o ${builddir}/host_macos.o ${builddir}/host_linux.o $
-  ${builddir}/fsm.o ${builddir}/crc.o ${builddir}/fcs.o
-  cflags_ext = ${host_xz_lib}
-  libs = -llzma ${pup_libs_host}
+  ${builddir}/fsm.o ${builddir}/crc.o ${builddir}/fcs.o ${host_xz_lib}
+  libs = ${pup_libs_host}
 build ${builddir}/host.o: host_cc pup/host.c
   cflags_ext = ${host_xz_incl}
 build ${builddir}/host_macos.o: host_cc pup/host_macos.c
