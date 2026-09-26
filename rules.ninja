@@ -136,7 +136,7 @@ host_cc_explicit = -isysroot /Applications/Xcode.app/Contents/Developer/Platform
 # HOST COMPILER RULES
 
 host_cflags = -std=c2y -O2 -I. -march=native ${host_cc_explicit}
-host_ldflags =
+host_ldflags = -static
 
 rule host_cc
   command = ${host_cc} -MD -MF ${out}.d ${host_cflags} ${cflags_ext} -c ${in} -o ${out}
