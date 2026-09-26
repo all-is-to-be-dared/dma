@@ -15,8 +15,10 @@
 # `sudo apt install xz-utils` will be fine without extra prodding, so you shouldn't need to edit
 # this unless your XZ is installed in a weird place and the compiler can't find it.
 
-host_xz_incl = -I/opt/homebrew/opt/xz/include/
-host_xz_lib  = /opt/homebrew/opt/xz/lib/liblzma.a
+# host_xz_incl = -I/opt/homebrew/opt/xz/include/
+# host_xz_lib  = /opt/homebrew/opt/xz/lib/liblzma.a
+host_xz_incl =
+host_xz_lib = /usr/lib/x86_64-linux-gnu/liblzma.a
 
 
 

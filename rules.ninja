@@ -61,10 +61,10 @@ arm_objcopy = ${objcopy}
 #
 #     -nostartfiles
 # 
-# arm_cc_explicit = --target=arm-none-eabi --sysroot /usr/lib/arm-none-eabi -fshort-enums
-arm_cc_explicit = --target=arm-none-eabi -fshort-enums $
-                  --sysroot /Applications/ArmGNUToolchain/15.2.rel1/arm-none-eabi/bin/../arm-none-eabi $
-                  --gcc-install-dir=/Applications/ArmGNUToolchain/15.2.rel1/arm-none-eabi/lib/gcc/arm-none-eabi/15.2.1
+arm_cc_explicit = --target=arm-none-eabi --sysroot /usr/lib/arm-none-eabi -fshort-enums
+# arm_cc_explicit = --target=arm-none-eabi -fshort-enums $
+#                   --sysroot /Applications/ArmGNUToolchain/15.2.rel1/arm-none-eabi/bin/../arm-none-eabi $
+#                   --gcc-install-dir=/Applications/ArmGNUToolchain/15.2.rel1/arm-none-eabi/lib/gcc/arm-none-eabi/15.2.1
 # arm_cc_explicit = -nostartfiles
 
 
@@ -123,8 +123,8 @@ rule arm_mergelibs
 
 host_cc = ${cc}
 host_ld = ${cc}
-host_cc_explicit = -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk $
-  -resource-dir /opt/homebrew/opt/llvm/lib/clang/23/
+# host_cc_explicit = -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk $
+#   -resource-dir /opt/homebrew/opt/llvm/lib/clang/23/
 host_ld_explicit =
 
 
