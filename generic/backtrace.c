@@ -146,9 +146,9 @@ bool backtrace_enable(void *elf_image_base) {
   // works off the symbol table. However, this only works if the compiler has
   // been told not to omit frame pointer codegen. Thus: we check that
   // frame-pointer is not omitted!
-  if (strstr(_CFLAGS_, "-fno-omit-frame-pointer")) {
+  if (strstr(__CAPTURED_CFLAGS, "-fno-omit-frame-pointer")) {
     has_frame_pointer = true;
-  } else if (strstr(_CFLAGS_, "-fomit-frame-pointer")) {
+  } else if (strstr(__CAPTURED_CFLAGS, "-fomit-frame-pointer")) {
     has_frame_pointer = false;
   } else {
     has_frame_pointer = __OPTIMIZE__ > 0;

@@ -41,7 +41,8 @@ default bcm2835/libsanrt.a
 # --------------------------------------------------------------------------------------------------
 # All executable targets
 
-# subninja bcm2835/240-superopt/build.ninja
+subninja bcm2835/240-superopt/build.ninja
 subninja bcm2835/240-integ/build.ninja
 # subninja bcm2835/240-ubsan/build.ninja
 # subninja bcm2835/010-dma/build.ninja
+subninja bcm2835/demo/build.ninja

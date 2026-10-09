@@ -18,12 +18,19 @@ static _Alignas(0x4000) struct mmu_translation_table ttb = {};
 bool
 check_coverage(IntegRegistry *ihdr, uintptr_t dram_start, uintptr_t dram_end);
 
+uint32_t
+randomize_memory_reference(uint8_t *_Nullable p, size_t s, uint32_t seed);
+
+[[gnu::naked]]
+uint32_t
+randomize_memory(uint8_t *_Nullable p, size_t s, uint32_t seed);
+
 void
 main(struct elf_boot_args *boot_args)
 {
   gpio_pin_set_function(14, FSEL_ALT5);
   gpio_pin_set_function(15, FSEL_ALT5);
-  aux_uart_init(1152000, ptag_get_nominal_clock_rate(PCID_CORE));
+  aux_uart_init(1152000);
   systmr_delay_ms(1000);
   printf(__FILE__ ": starting\n");
   printf("Boot args:\n");
@@ -43,15 +50,26 @@ main(struct elf_boot_args *boot_args)
 
   // -----------------------------------------------------------------------------------------------
 
-  for(int j = 0;j < 20;j++) {
-    printf("    \x1b[4m\x1b[2m       Clock     Nominal    Measured\n\x1b[0m");
-    for(int i = 0;i < PCID_CLOCK_COUNT;i++) {
-      printf(
-        "    %12s% 12d% 12d\n", PTAG_CLOCK_NAMES[i], ptag_get_nominal_clock_rate(i), ptag_get_measured_clock_rate(i));
+  uint8_t test_buffer[1024], ref_buffer[1024];
+  uint32_t test_seed_p, ref_seed_p;
+
+  printf("test_buffer@%p ref_buffer@%p\n", test_buffer, ref_buffer);
+  
+  for(int i = 0;i < 1024;i++) {
+    for(int j = 0;j < (1024 - i);j++) {
+      printf("i=%d, j=%d\n", i, j);
+      memset(test_buffer, 0, 1024);
+      memset(ref_buffer, 0, 1024);
+
+      ref_seed_p = randomize_memory_reference(ref_buffer + i, j, 1);
+      printf("ref_seed_p = %x\n", ref_seed_p);
+      test_seed_p = randomize_memory(test_buffer + i, j, 1);
+      printf("test_seed_p = %x\n", test_seed_p);
+
+      assert(ref_seed_p == test_seed_p);
+      assert(!memcmp(test_buffer, ref_buffer, j));
     }
   }
-
-  // -----------------------------------------------------------------------------------------------
 
   printf("\nDONE.\n");
   aux_uart_flush_tx_fifo();
@@ -97,73 +115,176 @@ integ_chk(IntegRegistry *ihdr, const uint8_t *seed)
 
 // -------------------------------------------------------------------------------------------------
 
-[[gnu::naked]]
-void
-purgable_prep(void *_Nullable p, size_t s, uint32_t seed)
+static inline uint32_t xorshift32(uint32_t *seed) {
+  uint32_t t;
+  t = *seed;
+  t ^= t << 13;
+  t ^= t >> 17;
+  t ^= t << 5;
+  *seed = t;
+  return t;
+}
+
+uint32_t
+randomize_memory_reference(uint8_t *_Nullable p, size_t s, uint32_t seed)
 {
-  // splitmix32
-  // a += 0x9e3779b9
-  // t = a
-  // t ^= (a >> 16) * 0x21f0aaad
-  // t ^= (t >> 15) * 0x735a2d97
-  // t ^= (t >> 15)
-  // return t
-  __asm__("adr r3, 2f\n"
-          "stm r3, {r4-r14}\n"
-          "ldr r4, =0x9e3779b9\n"
-          "ldr r5, =0x735a2d96\n"
+  uint8_t *start_word, *stop;
+  uint32_t *q, *stop_word;
 
-          // TODO: need to add checks against s
+  stop = p + s;
+  stop_word = (uint32_t*)((uintptr_t)stop & ~3U);
+  // stop_block = (uint8_t*)((uintptr_t)stop & ~31U);
+  // start_block = (uint8_t*)(((uintptr_t)p + 31) & ~31U);
+  start_word = (uint8_t*)(((uintptr_t)p + 3) & ~3U);
 
-          "tst r0, #31\n"
-          "beq 5f\n"
+  // start_block = min(start_block, stop_block);
+  start_word = min(start_word, (uint8_t*)stop_word);
 
-          "tst r0, #3\n"
-          "beq 4f\n"
+  while(p < start_word)
+    *p++ = xorshift32(&seed);
 
-          // pre.x1:
-          "add r2, r2, r4\n"
-          "mov r6, r2, lsr #16\n"
-          "mul r6, r6, r4\n"
-          "lsr r6, r6, #15\n"
-          "mul r6, r6, r5\n"
-          "lsr r6, r6, #15\n"
-          "3:\n"
-          "strb r6, [r0], #1\n"
-          "lsr r6, r6, #8\n"
-          "tst r0, #3\n"
-          "bne 3b\n"
+  q = (uint32_t *)p;
+  while(q < (uint32_t*)stop_word)
+    *q++ = xorshift32(&seed);
 
-          // pre.x4
-          "4:\n"
-          "add r2, r2, r4\n"
-          "mov r6, r2, lsr #16\n"
-          "mul r6, r6, r4\n"
-          "lsr r6, r6, #15\n"
-          "mul r6, r6, r5\n"
-          "lsr r6, r6, #15\n"
-          "str r6, [r0], #4\n"
-          "tst r0, #31\n"
-          "bne 4b\n"
+  p = (uint8_t*)q;
+  while(p < stop)
+    *p++ = xorshift32(&seed);
 
-          // hot
-          "5:\n"
-          "stmia r0!, {r6-r13}\n"
-          ""
+  return seed;
+}
 
-          // post.x4
-          "5:\n"
+/// Randomize `s` bytes of memory starting at `p`, using the seed `seed`.
+[[gnu::naked]]
+uint32_t
+randomize_memory(uint8_t *_Nullable p, size_t s, uint32_t seed)
+{
+  __asm__(
+    // ---------------------------------------------------------------------------------------
+    // PROLOGUE
 
-          // post.x1
-          "6:\n"
+    "push {r4-r12, r14}\n"
+    "mov r11, r2\n"        // for striping
+    "add r14, r0, r1\n"    // r14 = stop
 
-          "add r3, r3, r4\n"
-          "adr r3, 2f\n"
-          "ldm r3, {r4-r14}\n"
-          "bx lr\n"
-          //
-          "2: .rept 11\n.word 0\n.endr\n" ::
-            : "memory");
+    "1:\n"
+    "and r3, r14, #-3\n"   // r3  = stop_word
+    "add r12, r0, #3\n"    // r12 = min(start_word, stop_word)
+    "and r12, r12, #-3\n"  //       ...
+    "cmp r12, r3\n"        //       ...
+    "movhi r12, r3\n"      //       ...
+    // while r0 < r12
+    //   *r0 = xorshift32 ( &r11 ) & 0xff
+    //   r0 += 1
+    "cmp r0, r12\n"
+    "bhs 3f\n"
+    "2:\n"
+    "eor r11, r11, r11, lsl #13\n"
+    "eor r11, r11, r11, lsr #17\n"
+    "eor r11, r11, r11, lsl #5\n"
+    "strb r11, [r0], #1\n"
+    "cmp r0, r12\n"
+    "bne 2b\n"
+
+    "3:\n"
+
+    "and r3, r14, #-31\n"  // r3  = stop_block
+    "add r12, r0, #31\n"   // r12 = min(start_block, stop_block)
+    "and r12, r12, #-31\n" //       ...
+    "cmp r12, r3\n"        //       ...
+    "movhi r12, r3\n"      //       ...
+    // while r0 < r12
+    //   *r0 = xorshift32 ( &r11 )
+    //   r0 += 4
+    "cmp r0, r12\n"
+    "bhs 10f\n"
+    "4:\n"
+    "eor r11, r11, r11, lsl #13\n"
+    "eor r11, r11, r11, lsr #17\n"
+    "eor r11, r11, r11, lsl #5\n"
+    "str r11, [r0], #4\n"
+    "cmp r0, r12\n"
+    "bne 4b\n"
+
+    // ---------------------------------------------------------------------------------------
+    // 32-WIDE STRIPED BLOCKS
+
+    "10:\n"
+    // while r0 < r3
+    //   *r0[0:8] = xorshift32.x8 ( &r11 )
+    //   r0 += 32
+    "cmp r0, r3\n"
+    "beq 20f\n"
+
+    "11:\n"
+    "eor r4, r11, r11, lsl #13\n"
+    "eor r5, r4, r4, lsl #13\n"
+    "eor r6, r5, r5, lsl #13\n"
+    "eor r7, r6, r6, lsl #13\n"
+    "eor r8, r7, r7, lsl #13\n"
+    "eor r9, r8, r8, lsl #13\n"
+    "eor r10, r9, r9, lsl #13\n"
+    "eor r11, r10, r10, lsl #13\n"
+    "eor r4, r4, r4, lsr #17\n"
+    "eor r5, r5, r5, lsr #17\n"
+    "eor r6, r6, r6, lsr #17\n"
+    "eor r7, r7, r7, lsr #17\n"
+    "eor r8, r8, r8, lsr #17\n"
+    "eor r9, r9, r9, lsr #17\n"
+    "eor r10, r10, r10, lsr #17\n"
+    "eor r11, r11, r11, lsr #17\n"
+    "eor r4, r4, r4, lsl #5\n"
+    "eor r5, r5, r5, lsl #5\n"
+    "eor r6, r6, r6, lsl #5\n"
+    "eor r7, r7, r7, lsl #5\n"
+    "eor r8, r8, r8, lsl #5\n"
+    "eor r9, r9, r9, lsl #5\n"
+    "eor r10, r10, r10, lsl #5\n"
+    "eor r11, r11, r11, lsl #5\n"
+
+    "stmia r0!, {r4-r11}\n"
+    "cmp r0, r3\n"
+    "bne 11b\n"
+
+    // ---------------------------------------------------------------------------------------
+    // TAIL
+    "20:\n"
+
+    "and r3, r14, #-3\n" // r3  = stop_word
+
+    // while r0 != r3
+    //   *r0 = xorshift32( &r11 )
+    //   r0 += 4
+    "cmp r0, r3\n"
+    "bne 22f\n"
+    "21:\n"
+    "eor r11, r11, r11, lsl #13\n"
+    "eor r11, r11, r11, lsr #17\n"
+    "eor r11, r11, r11, lsl #5\n"
+    "str r11, [r0], #4\n"
+    "cmp r0, r3\n"
+    "bne 21b\n"
+
+    // while r0 != r14
+    //   *r0 xorshift32( &r11 ) & 0xff
+    //   r0 += 1
+    "22:\n"
+    "cmp r0, r14\n"
+    "bne 30f\n"
+    "23:\n"
+    "eor r11, r11, r11, lsl #13\n"
+    "eor r11, r11, r11, lsr #17\n"
+    "eor r11, r11, r11, lsr #5\n"
+    "strb r11, [r0], #1\n"
+    "cmp r0, r14\n"
+    "bne 23b\n"
+
+    // ---------------------------------------------------------------------------------------
+    // EPILOGUE
+    "30:\n"
+    "pop {r4-r12, r14}\n"
+    "mov r0, r11\n"
+    "bx lr\n" ::: "memory");
 }
 
 // -------------------------------------------------------------------------------------------------

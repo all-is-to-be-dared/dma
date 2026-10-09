@@ -176,13 +176,14 @@ static_assert(offsetof(hw_aux_uart_t, baud) == (0x68 - 0x40), "hw_uax_uart_t has
 static hw_aux_uart_t* aux_uart = (hw_aux_uart_t*)AUX_UART_BASE;
 
 void
-aux_uart_init(uint32_t baud_rate, uint32_t core_freq);
+aux_uart_init(uint32_t baud_rate);
 
 void
 aux_uart_clear_fifos();
 
+// Note that this flushes the TX FIFO, and does not touch the RX FIFO.
 void
-aux_uart_set_baud_rate(uint32_t baud_rate, uint32_t core_freq);
+aux_uart_set_baud_rate(uint32_t baud_rate);
 
 bool
 aux_uart_tx_idle(void);
@@ -203,5 +204,3 @@ aux_uart_read(void);
  * PROGRAM EXECUTION
  */
 
-// void
-// main(struct elf_boot_args *boot_args);

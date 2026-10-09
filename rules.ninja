@@ -74,12 +74,13 @@ arm_cc_explicit = --target=arm-none-eabi --sysroot /usr/lib/arm-none-eabi -fshor
 # ARMv6 COMPILER RULES
 
 arm_cflags    = -Wall -O3 -I. -ffreestanding -nostdlib -std=gnu23 -march=armv6zk $
-                -mcpu=arm1176jzf-s -fdiagnostics-color ${arm_cc_explicit} -fomit-frame-pointer
+                -mcpu=arm1176jzf-s -fdiagnostics-color ${arm_cc_explicit} -fno-omit-frame-pointer -g
 arm_ldflags    = -z noexecstack --gc-sections -static
 
 # params: cflags_ext
 rule arm_cc
-  command = ${arm_cc} -MD -MF ${out}.d ${arm_cflags} ${cflags_ext} -DCAPTURED_CFLAGS="\"${arm_cflags} ${cflags_ext}\"" -c ${in} -o ${out}
+  command = ${arm_cc} -MD -MF ${out}.d ${arm_cflags} ${cflags_ext} $
+            -D__CAPTURED_CFLAGS="\"${arm_cflags} ${cflags_ext}\"" -c ${in} -o ${out}
   deps = gcc
   depfile = ${out}.d
   description = ${_green}[ARM_CC]${_reset} ${out}

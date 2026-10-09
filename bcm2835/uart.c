@@ -1,3 +1,4 @@
+#include <bcm2835/ptags.h>
 #include <bcm2835/platform.h>
 #include <bcm2835/arch.h>
 
@@ -8,7 +9,7 @@ baud_to_prescaler(uint32_t baud_rate, uint32_t core_freq)
 }
 
 void
-aux_uart_init(uint32_t baud_rate, uint32_t core_freq)
+aux_uart_init(uint32_t baud_rate)
 {
   dsb();
   aux->enables |= AUX_ENABLE_UART;
@@ -19,7 +20,7 @@ aux_uart_init(uint32_t baud_rate, uint32_t core_freq)
   aux_uart_clear_fifos();
   aux_uart->lcr = AUX_UART_LCR_8BIT;
   aux_uart->mcr = 0;
-  aux_uart->baud = (uint32_t)baud_to_prescaler(baud_rate, core_freq);
+  aux_uart->baud = (uint32_t)baud_to_prescaler(baud_rate, ptag_get_nominal_clock_rate(PCID_CORE));
   aux_uart->ier = 0;
   aux_uart->cntl = AUX_UART_CNTL_TX_ENABLE | AUX_UART_CNTL_RX_ENABLE;
 
@@ -34,15 +35,13 @@ aux_uart_clear_fifos(void)
 }
 
 void
-aux_uart_set_baud_rate(uint32_t baud_rate, uint32_t core_freq)
+aux_uart_set_baud_rate(uint32_t baud_rate)
 {
   dsb();
-  aux_uart_clear_fifos();
+  aux_uart_flush_tx_fifo();
   aux_uart->cntl &= ~(AUX_UART_CNTL_TX_ENABLE | AUX_UART_CNTL_RX_ENABLE);
-  aux_uart->baud = (uint32_t)baud_to_prescaler(baud_rate, core_freq);
-  // aux_uart->baud = baud_to_prescaler(baud_rate, core_freq);
-  (void)aux_uart->lsr; // don't remember why i did this
-  aux_uart_clear_fifos();
+  aux_uart->baud = (uint32_t)baud_to_prescaler(baud_rate, ptag_get_nominal_clock_rate(PCID_CORE));
+  (void)aux_uart->lsr; // don't remember why i did this; probably to clear state?
   aux_uart->cntl |= AUX_UART_CNTL_TX_ENABLE | AUX_UART_CNTL_RX_ENABLE;
   dsb();
 }

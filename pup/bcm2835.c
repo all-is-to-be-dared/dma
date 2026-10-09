@@ -1,29 +1,24 @@
-#include "bcm2835/ptags.h"
-#include "elf.h"
 #include <inttypes.h>
 #include <string.h>
 
+#include <bcm2835/platform.h>
+
+#include <generic/assert.h>
+#include <generic/math.h>
 #include <generic/printf.h>
 
 #include <pup/xz-embedded/xz.h>
-
-#include <bcm2835/platform.h>
-#include <generic/assert.h>
-#include <generic/math.h>
 #include <pup/common.h>
 #include <pup/config.h>
-
+#include <pup/device.h>
 #include <pup/trampoline.h>
-
+#include <pup/elf.h>
 #include <pup/protocol.h>
 static_assert(sizeof(struct elf_loader_op) == 16);
 
 bool platform_can_read(void) { return aux_uart_can_read(); }
-
 uint8_t platform_read(void) { return aux_uart_read(); }
-
 void platform_write(uint8_t x) { return aux_uart_put(x); }
-
 uint64_t platform_time(void) { return systmr_read_raw(); }
 
 static uint8_t _Alignas(8) xz_arena[2 << 20];
@@ -45,7 +40,7 @@ void *xz_malloc_stub(size_t size) {
 }
 
 void xz_free_stub(void *p) {
-  printf(BOOT FUNC("xz_free_stub") ERROR "(%p) called\n", p);
+  printf(BOOT FUNC("xz_free_stub") ERROR "xz_free_stub called for (%p)\n", p);
   return;
 }
 struct xz_dec *XZ;
@@ -90,13 +85,6 @@ bool platform_init_meta(meta_t *meta) {
 
   prog_start = (uintptr_t)__prog_start;
   prog_end = (uintptr_t)__prog_end;
-
-  // printf("meta: IF=%08x CT=%08x WZ=%08x MZ=%08x MC=%08x\n",
-  //        meta->image_format,
-  //        meta->compression_type,
-  //        meta->wire_size,
-  //        meta->mem_size,
-  //        meta->mem_crc32);
 
   if (meta->compression_type >= NUM_COMPRESS_TYPES) {
     printf(BOOT FUNC("platform_init_meta") ERROR
@@ -333,32 +321,28 @@ bool platform_feed(size_t chunk_no, uint8_t *data, size_t len) {
   return true;
 }
 
-enum {
-  CRC_BLOCKSIZE = 0x4000,
-};
-
+// Take CRC of data while sending an `fsm_heartbeat()` every `block_size` bytes.
 static uint32_t crc_with_heartbeat(uint32_t crc, uint8_t *data,
-                                   uint8_t *until) {
+                                   uint8_t *until, size_t block_size) {
   size_t blocksz;
   while (data < until) {
     fsm_heartbeat();
-    blocksz = min(until - data, CRC_BLOCKSIZE);
+    blocksz = min(until - data, block_size);
     crc = crc32(crc, data, blocksz);
     data += blocksz;
   }
   return crc;
 }
 
-extern bool load_elf_image(uintptr_t img_start, uintptr_t img_end, bool elf32_p,
-                           bool elfle_p, uint16_t machine, uintptr_t mem_hi,
-                           const char *cmdline);
-extern uintptr_t elf_trampoline();
-
 bool platform_load_image(void) {
   uint32_t crc;
   size_t cnt, off;
   bool crc_ok, format_ok;
   uint8_t *end;
+
+  enum {
+    CRC_BLOCKSIZE = 0x4000,
+  };
 
   end = (uint8_t *)img_start + META.mem_size;
 
@@ -380,7 +364,7 @@ bool platform_load_image(void) {
         cnt = reloc.tgt_start - feed;
         printf(BOOT FUNC("platform_load_image") "CRC [%p,%p)\n", feed,
                feed + cnt);
-        crc = crc_with_heartbeat(crc, feed, feed + cnt);
+        crc = crc_with_heartbeat(crc, feed, feed + cnt, CRC_BLOCKSIZE);
         feed += cnt;
       }
       if (feed >= reloc.tgt_start && feed < reloc.tgt_end) {
@@ -389,13 +373,13 @@ bool platform_load_image(void) {
         printf(BOOT FUNC("platform_load_image") "CRC indirect [+%zx,+%zx)\n",
                off, off + cnt);
         crc = crc_with_heartbeat(crc, reloc.buf_start + off,
-                                 reloc.buf_start + off + cnt);
+                                 reloc.buf_start + off + cnt, CRC_BLOCKSIZE);
         feed += cnt;
       }
     }
     if (feed < end) {
       printf(BOOT FUNC("platform_load_image") "CRC [%p,%p)\n", feed, end);
-      crc = crc_with_heartbeat(crc, feed, end);
+      crc = crc_with_heartbeat(crc, feed, end, CRC_BLOCKSIZE);
     }
 
     crc_ok = crc == META.mem_crc32;
@@ -435,13 +419,18 @@ bool platform_load_image(void) {
   if (crc_ok && format_ok)
     printf(BOOT FUNC("platform_load_image") "okay to boot\n");
 
-  return crc_ok;
+  return crc_ok && format_ok;
 }
+
+
+
 
 [[noreturn]]
 static void trampoline() {
   uint32_t branch_to;
   switch (META.image_format) {
+  // -----------------------------------------------------------------------------------------------
+  // Case: .bin file
   case IMAGE_FLAT_BINARY:
     if (reloc.size) {
       memcpy(reloc.stub_start, TRAMPOLINE_START,
@@ -455,17 +444,22 @@ static void trampoline() {
 
     aux_uart_flush_tx_fifo();
 
-    register uint32_t r0 asm("r0"), r1 asm("r1"), r2 asm("r2"), r3 asm("r3"),
-        r4 asm("r4");
-    r0 = (uint32_t)reloc.tgt_start;
-    r1 = (uint32_t)reloc.buf_start;
-    r2 = (uint32_t)reloc.size;
-    r3 = (uint32_t)img_start;
-    r4 = branch_to;
-    __asm__ volatile("bx r4" : : "r"(r0), "r"(r1), "r"(r2), "r"(r3), "r"(r4));
-    __builtin_unreachable();
+    {
+      register uint32_t r0 asm("r0"), r1 asm("r1"), r2 asm("r2"), r3 asm("r3"),
+          r4 asm("r4");
+      r0 = (uint32_t)reloc.tgt_start;
+      r1 = (uint32_t)reloc.buf_start;
+      r2 = (uint32_t)reloc.size;
+      r3 = (uint32_t)img_start;
+      r4 = branch_to;
+      __asm__ volatile("bx r4" : : "r"(r0), "r"(r1), "r"(r2), "r"(r3), "r"(r4));
+      __builtin_unreachable();
+    }
 
+  // -----------------------------------------------------------------------------------------------
+  // Case: .elf file
   case IMAGE_ELF:
+    // ELF trampoline is more complicated, so we call out here.
     branch_to = elf_trampoline();
 
     printf(BOOT "loaded trampoline at 0x%x, jumping\n", branch_to);
@@ -474,7 +468,9 @@ static void trampoline() {
 
     __asm__ volatile("bx %0" : : "r"(branch_to));
     __builtin_unreachable();
-
+  
+  // -----------------------------------------------------------------------------------------------
+  // Case: unrecognized format
   default:
     panic(BOOT FUNC("trampoline") ERROR "Unknown image format %u\n",
           META.image_format);
@@ -482,6 +478,9 @@ static void trampoline() {
 
   __builtin_unreachable();
 }
+
+
+
 
 void main(void) {
   uint32_t r;
@@ -493,21 +492,11 @@ void main(void) {
   gpio_pin_set_function(15, FSEL_ALT5);
   gpio_pin_set_function(47, FSEL_OUTP);
 
-  aux_uart_init(
-    BAUD_RATE,
-    // adapt to the current core clock rate; I think you want nominal here rather than measured
-    // the :250'000'000 is probably mostly my own paranoia
-    ptag_get_nominal_clock_rate(PCID_CORE) ?: 250'000'000);
+  aux_uart_init(BAUD_RATE);
 
   xz_crc32_init();
-
-  // printf(__FILE__ ": PDOWN started successfully!\n");
 
   fsm_download(&config);
 
   trampoline();
-
-  // printf("FSM EXITED\n");
-  // printf("DONE!!!\n");
-  // aux_uart_flush_tx_fifo();
 }

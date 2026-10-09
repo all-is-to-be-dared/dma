@@ -3,6 +3,17 @@
 #include <stddef.h>
 #include <stdint.h>
 
+
+
+
+uint32_t
+memory_hash(const void *seed_ptr, const void *p, const size_t sz);
+
+#define SEED_SIZE 4
+
+
+
+
 enum {
   // expected to change
   IRF_Mutable = 0x1,
@@ -45,10 +56,6 @@ typedef struct
   IntegRegion regions[];
 } IntegRegistry;
 
-uint32_t
-memory_hash(const void *seed_ptr, const void *p, const size_t sz);
-#define SEED_SIZE 4
-
 enum integ_state
 {
   // no memory was found to be corrupted
@@ -65,3 +72,69 @@ typedef struct
   size_t additional_regions_required;
 } IntegResult;
 
+
+
+/*
+  xoroshiro64**
+
+  result = [ (s0 * 0x9e3779bb) <<< 5 ] * 5
+
+  s1' = s1 ^ s0
+  s0' = (s0 <<< 26) ^ s1' ^ s1' << 9
+  s1'' = (s1' <<< 13)
+
+  mul r0, s0, r_GR       @ s0 * 0x9e3779bb   -> T
+
+  xor s1, s1, s0         @ s1 ^ s0           -> s1
+  xor r1, s1, s1, lsl #9 @ s1 ^ s1 << 9
+  xor s0, r1, s0, ror #6 @ ... ^ (s0 <<< 26) -> s0
+  ror s1, s1, #19        @ s1 <<< 13         -> s1
+
+  @ for xoroshiro64*, can just drop these last two lines
+  mov r0, r0, ror #27    @ T <<< 5
+  add r0, r0, r0, lsl #2 @ ... * 5           -> result
+*/
+
+/*
+  xoshiro128++
+
+  result = [ (s0 + s3) <<< 7 ] + s0
+
+  s2' =  s2 ^ s0 ^ (s1 << 9)
+  s3' = (s3 ^ s1) <<< 11
+  s0' =  s0 ^ s3'
+  s1' =  s1 ^ s2'
+
+  add r0, s0, s3          @ s0 + s3
+  add r0, s0, r0, ror #25 @ s0 + (... <<< 7)
+
+  xor s2, s2, s0
+  xor s2, s2, s1, lsl #9
+  xor s3, s3, s1
+  ror s3, s3, #21
+  xor s0, s0, s3
+  xor s1, s1, s2
+*/
+
+/*
+  xoshiro128**
+
+  result = [ (s1 * 5) <<< 7 ] * 9
+
+  s2' =  s2 ^ s0 ^ (s1 << 9)
+  s3' = (s3 ^ s1) <<< 11
+  s1' =  s1 ^ s2
+  s0' =  s0 ^ s3
+
+  add r0, s1, s1, lsl #2 @ s1*5
+  ror r0, r0, #25        @ ... <<< 7
+  add r0, r0, r0, lsl #3 @ ... * 9
+ */
+
+/*
+  xorshift32
+
+  s = s ^ (s << 13)
+  s = s ^ (s >> 17)
+  s = s ^ (s << 5)
+*/

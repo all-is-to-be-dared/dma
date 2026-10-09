@@ -1,13 +1,15 @@
 #include <stdint.h>
 #include <stdlib.h>
-#include <elf.h>
 #include <string.h>
 
-#include "generic/printf.h"
-#include "pup/common.h"
-#include "generic/assert.h"
-#include "pup/trampoline.h"
-#include "pup/protocol.h"
+#include <generic/printf.h>
+#include <generic/assert.h>
+
+#include <pup/common.h>
+#include <pup/trampoline.h>
+#include <pup/protocol.h>
+#include <pup/device.h>
+#include <pup/elf.h>
 
 extern uint8_t __prog_start[], __prog_end[];
 

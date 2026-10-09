@@ -1,10 +1,10 @@
 #pragma once
 
-/* _CFLAGS_ is defined in rules.ninja. We do this here mostly so the LSP doesn't protest, and as a
+/* __CAPTURED_CFLAGS is defined in rules.ninja. We do this here mostly so the LSP doesn't protest, and as a
    backup.
  */
-#if !defined(_CFLAGS_)
-#define _CFLAGS_ ""
+#if !defined(__CAPTURED_CFLAGS)
+#define __CAPTURED_CFLAGS ""
 #endif
 
 #if defined(__GNUC__) && !defined(__clang__)

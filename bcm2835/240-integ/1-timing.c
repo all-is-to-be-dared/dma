@@ -26,7 +26,7 @@ main(struct elf_boot_args *boot_args)
   gpio_pin_set_function(14, FSEL_ALT5);
   gpio_pin_set_function(15, FSEL_ALT5);
 
-  aux_uart_init(1152000, 400'000'000);
+  aux_uart_init(1152000);
 
   systmr_delay_ms(1000);
   printf(__FILE__ ": starting\n");
@@ -57,7 +57,7 @@ main(struct elf_boot_args *boot_args)
   uint32_t c, hash, i;
   enum
   {
-    N = 32
+    N = 8
   };
   double s, tput, avg_tput_read, avg_tput_hash;
   int64_t avg_cy_read, avg_cy_hash;
@@ -67,6 +67,7 @@ main(struct elf_boot_args *boot_args)
   printf("===== [ TEST : SPEED OF LDMIA/8 ] =====\n");
 
   s = 0.;
+#pragma nounroll
   for (i = 0; i < N; i++) {
     us0 = systmr_read_raw();
     cycle_count_write(0);
@@ -104,6 +105,7 @@ main(struct elf_boot_args *boot_args)
   printf("===== [ TEST : SPEED OF XXH32-MOD ] =====\n");
 
   s = 0.;
+#pragma nounroll
   for (i = 0; i < N; i++) {
     us0 = systmr_read_raw();
     cycle_count_write(0);
@@ -112,13 +114,13 @@ main(struct elf_boot_args *boot_args)
     us1 = systmr_read_raw();
     dus = us1 - us0;
     tput = (double)ep / (double)dus / 1024 * 1000 / 1024 * 1000;
-    // printf("hash %#x bytes (%#10x) in %dcy / %llu.%03llums : %f MB/s\n",
-    //        ep,
-    //        hash,
-    //        c,
-    //        dus / 1000,
-    //        dus % 1000,
-    //        tput);
+    printf("hash %#x bytes (%#10x) in %dcy / %llu.%03llums : %f MB/s\n",
+           ep,
+           hash,
+           c,
+           dus / 1000,
+           dus % 1000,
+           tput);
     printf("Hashing... [%d/%d]\r", i, N);
     s += tput;
     avg_cy_hash += c;
