@@ -151,7 +151,7 @@ fsm_recv(mframe_t* frame)
 
 
 wait_for_soh:
-  printf("---|");
+  // printf("---|");
 
   while (1) {
 #if !NO_DOWNLOAD
@@ -366,14 +366,14 @@ reset:
   fsm.timers[TIMER_RESET].active = false;
   fsm.timers[TIMER_RESEND].active = false;
 
-  printf(BOOT "FSM DOWNLOAD INIT\n");
+  // printf(BOOT "FSM DOWNLOAD INIT\n");
 
   while (1) {
     if (FSM_OK == fsm_recv(&framebuf)) {
-      printf(BOOT "received frame (INIT), TYPE=%.4s IDEN=%hu PLEN=%hu\n",
-             framebuf.type,
-             framebuf.iden,
-             framebuf.plen);
+      // printf(BOOT "received frame (INIT), TYPE=%.4s IDEN=%hu PLEN=%hu\n",
+      //        framebuf.type,
+      //        framebuf.iden,
+      //        framebuf.plen);
       if (!memcmp(framebuf.type, HOST_POLL, 4) && framebuf.iden == 0 &&
           framebuf.plen == sizeof meta) {
         memcpy(&meta, framebuf.raw_body, sizeof meta);
@@ -402,19 +402,19 @@ reset:
       fsm_send(DEV_RQCH, (void*)&chunk_req, sizeof chunk_req);
       fsm_timer_clear(TIMER_RESEND, platform_time());
 
-      uint64_t t0 = platform_time();
+      // uint64_t t0 = platform_time();
       r = fsm_recv(&framebuf);
-      uint64_t t1 = platform_time();
-      printf(BOOT "wait for CHNK for %lluμs, %s\n", t1-t0, FSM_STATUS_NAMES[r]);
-      printf(BOOT "RESET=%llu/%llu/%d now=%llu\n",
-             fsm.timers[TIMER_RESET].last,
-             fsm.timers[TIMER_RESET].period,
-             fsm.timers[TIMER_RESET].active,
-             platform_time());
-      printf(BOOT "received frame (CHNK), TYPE=%.4s IDEN=%hu PLEN=%hu\n",
-             framebuf.type,
-             framebuf.iden,
-             framebuf.plen);
+      // uint64_t t1 = platform_time();
+      // printf(BOOT "wait for CHNK for %lluμs, %s\n", t1-t0, FSM_STATUS_NAMES[r]);
+      // printf(BOOT "RESET=%llu/%llu/%d now=%llu\n",
+      //        fsm.timers[TIMER_RESET].last,
+      //        fsm.timers[TIMER_RESET].period,
+      //        fsm.timers[TIMER_RESET].active,
+      //        platform_time());
+      // printf(BOOT "received frame (CHNK), TYPE=%.4s IDEN=%hu PLEN=%hu\n",
+      //        framebuf.type,
+      //        framebuf.iden,
+      //        framebuf.plen);
       if (r == FSM_RESET)
         goto reset;
       if (r == FSM_RESEND)

@@ -126,6 +126,11 @@ static int open_serial_dev(const char *path, uint32_t baud) {
   // Noncanonical mode
   tios.c_iflag &= ~(ICANON | ECHO | ECHOE | ISIG);
 
+  // XXX: Need this EXPLICITLY otherwise PUP will interpret 0x0d as 0x0a in ALL cases.
+  //      Predictably, this is the desired behavior for ASCII text, but NOT the desired behavior
+  //      when receiving binary data.
+  tios.c_iflag &= ~(ICRNL);
+
   // OUTPUT MODES:
   //  c_oflag
   //      OPOST   = enable following ouptut processing
