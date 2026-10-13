@@ -296,25 +296,28 @@ fsm_send(const char* type, const uint8_t* payload, uint16_t payload_len)
   uint16_t fcs;
   size_t i;
 
-  platform_write(ASC_SOH);
+  platform_put(ASC_SOH);
   fcs = FCS_INIT;
-  fcs = fsm_write16_fcs(fsm.iden, fcs);
-  fcs = fsm_write16_fcs(payload_len, fcs);
+  fcs = fsm_put16_fcs(fsm.iden, fcs);
+  fcs = fsm_put16_fcs(payload_len, fcs);
   for (i = 0; i < 4; i++)
-    fcs = fsm_write_fcs(type[i], fcs);
-  fsm_write16(fcs ^ 0xffff);
+    fcs = fsm_put_fcs(type[i], fcs);
+  fsm_put16(fcs ^ 0xffff);
 
-  platform_write(ASC_STX);
+  platform_put(ASC_STX);
   fcs = FCS_INIT;
-  for (i = 0; i < payload_len; i++)
-    fcs = fsm_write_fcs(payload[i], fcs);
-  // while (payload_len--) {
-  //   fcs = fsm_write_fcs(*payload++, fcs);
-  // }
-  fsm_write16(fcs ^ 0xffff);
+  fcs = fsm_write_fcs(payload, payload_len, fcs);
+  // for (i = 0; i < payload_len; i++)
+  //   fcs = fsm_put_fcs(payload[i], fcs);
+  fsm_put16(fcs ^ 0xffff);
 
-  platform_write(ASC_ETX);
-  platform_write(ASC_EOT);
+  platform_put(ASC_ETX);
+  platform_put(ASC_EOT);
+
+#if NO_DOWNLOAD
+  extern void platform_flush(void);
+  platform_flush();
+#endif
 }
 
 
@@ -325,12 +328,12 @@ fsm_send_ack(uint16_t iden)
 {
   uint16_t fcs;
 
-  platform_write(ASC_ACK);
+  platform_put(ASC_ACK);
   fcs = FCS_INIT;
-  fcs = fsm_write16_fcs(iden, fcs);
-  fsm_write16(fcs ^ 0xffff);
+  fcs = fsm_put16_fcs(iden, fcs);
+  fsm_put16(fcs ^ 0xffff);
 
-  platform_write(ASC_EOT);
+  platform_put(ASC_EOT);
 }
 
 

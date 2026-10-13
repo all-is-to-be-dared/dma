@@ -18,7 +18,8 @@ static_assert(sizeof(struct elf_loader_op) == 16);
 
 bool platform_can_read(void) { return aux_uart_can_read(); }
 uint8_t platform_read(void) { return aux_uart_read(); }
-void platform_write(uint8_t x) { return aux_uart_put(x); }
+void platform_put(uint8_t x) { return aux_uart_put(x); }
+void platform_write(const uint8_t *p, size_t sz) { while(sz--) platform_put(*p++); }
 uint64_t platform_time(void) { return systmr_read_raw(); }
 
 static uint8_t _Alignas(8) xz_arena[2 << 20];

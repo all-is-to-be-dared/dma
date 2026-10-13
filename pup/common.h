@@ -104,7 +104,15 @@ uint8_t
 platform_read(void);
 
 void
-platform_write(uint8_t);
+platform_put(uint8_t);
+
+void
+platform_write(const uint8_t *, size_t sz);
+
+#if NO_DOWNLOAD
+void
+platform_flush(void);
+#endif
 
 uint64_t
 platform_time(void);
@@ -174,24 +182,31 @@ fcs16(uint16_t fcs, const uint8_t* p, size_t size);
 
 
 static inline uint16_t
-fsm_write_fcs(uint8_t x, uint16_t fcs)
+fsm_put_fcs(uint8_t x, uint16_t fcs)
 {
-  platform_write(x);
+  platform_put(x);
   return fcs16(fcs, &x, 1);
 }
 
-static inline void
-fsm_write16(uint16_t x)
+static inline uint16_t
+fsm_write_fcs(const uint8_t *p, size_t sz, uint16_t fcs)
 {
-  platform_write(x & 0xff);
-  platform_write(x >> 8);
+  platform_write(p, sz);
+  return fcs16(fcs, p, sz);
+}
+
+static inline void
+fsm_put16(uint16_t x)
+{
+  platform_put(x & 0xff);
+  platform_put(x >> 8);
 }
 
 static inline uint16_t
-fsm_write16_fcs(uint16_t x, uint16_t fcs)
+fsm_put16_fcs(uint16_t x, uint16_t fcs)
 {
-  fcs = fsm_write_fcs(x & 0xff, fcs);
-  fcs = fsm_write_fcs(x >> 8, fcs);
+  fcs = fsm_put_fcs(x & 0xff, fcs);
+  fcs = fsm_put_fcs(x >> 8, fcs);
   return fcs;
 }
 

@@ -15,6 +15,8 @@
 #include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <termios.h>
+
 
 #define _POSIX_C_SOURCE 200112L
 #define _DARWIN_C_SOURCE
@@ -25,28 +27,31 @@
 #include "pup/host.h"
 
 opts_t opts = {
-    .self = "<UNINIT>",
-    .inp_path = "<UNINIT>",
-    .inp_fd = -1,
-    .dev_path = "<UNINIT>",
-    .dev_fd = -1,
-    .load_addr = ~0ULL,
-    .is_pty = false,
-    .headless = false,
-    .con_baud = 115200,
-    .debug = DBG_MIN,
-    .retries = 10,
-    ._print_usage = false,
-    .reset_tianleboard = false,
+  .self = "<UNINIT>",
+  .inp_path = "<UNINIT>",
+  .inp_fd = -1,
+  .dev_path = "<UNINIT>",
+  .dev_fd = -1,
+  .load_addr = ~0ULL,
+  .is_pty = false,
+  .headless = false,
+  .con_baud = 115200,
+  .debug = DBG_MIN,
+  .retries = 10,
+  ._print_usage = false,
+  .reset_tianleboard = false,
 };
 
-void parse_opts(int argc, char **argv) {
+void
+parse_opts(int argc, char **argv)
+{
   int r;
   uint64_t nv;
   enum find_status fsta;
 
   opts.self = argv[0];
-  enum {
+  enum
+  {
     OPT_NONE,
     OPT_DEV,
     OPT_LOAD,
@@ -57,68 +62,66 @@ void parse_opts(int argc, char **argv) {
     opts._print_usage = true;
   for (int i = 1; i < argc; i++) {
     switch (curr) {
-    case OPT_DEV:
-      fsta = find_serial_device(argv[i], &opts.dev_fd, BAUD_RATE);
-      switch (fsta) {
-      case FIND_OK:
-        break;
-      case FIND_NXDEV:
-        fprintf(stderr, "%s: No such device %s\n", opts.self, argv[i]);
-        exit(1);
-      case FIND_NOT_CHR:
-        fprintf(stderr, "%s: %s is not a character device\n", opts.self,
-                opts.dev_path);
-        exit(1);
-      case FIND_OPEN_FAIL:
-        fprintf(stderr, "%s: Failed to open %s\n", opts.self, opts.dev_path);
-        exit(1);
-      default:
-        fprintf(stderr, "%s: find_serial_device: unknown error %d\n", opts.self,
-                fsta);
-        exit(1);
-      }
-      curr = OPT_NONE;
-      continue;
-    case OPT_RETRIES:
-    case OPT_LOAD:
-    case OPT_CON_BAUD:
-      errno = 0;
-      char *end;
-      nv = strtoull(argv[i], &end, 0);
-      if (*end) {
-        fprintf(stderr, "%s: couldn't parse %s value: stopped parsing at %c\n",
-                opts.self, argv[i - 1], *end);
-        opts._print_usage = true;
-      } else if (errno) {
-        fprintf(stderr, "%s: couldn't parse %s value: %s\n", opts.self,
-                argv[i - 1], strerror(errno));
-        opts._print_usage = true;
-      } else {
-        if (curr == OPT_LOAD)
-          opts.load_addr = nv;
-        else if (curr == OPT_CON_BAUD) {
-          if (nv > UINT32_MAX) {
-            fprintf(stderr,
-                    "%s: console baud rate too large (must be < 2^32)\n",
-                    opts.self);
-            opts._print_usage = true;
-          } else {
-            opts.con_baud = nv;
-          }
-        } else if (curr == OPT_RETRIES) {
-          if (nv > UINT8_MAX) {
-            fprintf(stderr, "%s: console baud rate too large (must be < 256)\n",
-                    opts.self);
-            opts._print_usage = true;
-          } else {
-            opts.retries = nv;
+      case OPT_DEV:
+        fsta = find_serial_device(argv[i], &opts.dev_fd, BAUD_RATE);
+        switch (fsta) {
+          case FIND_OK:
+            break;
+          case FIND_NXDEV:
+            fprintf(stderr, "%s: No such device %s\n", opts.self, argv[i]);
+            exit(1);
+          case FIND_NOT_CHR:
+            fprintf(stderr, "%s: %s is not a character device\n", opts.self, opts.dev_path);
+            exit(1);
+          case FIND_OPEN_FAIL:
+            fprintf(stderr, "%s: Failed to open %s\n", opts.self, opts.dev_path);
+            exit(1);
+          default:
+            fprintf(stderr, "%s: find_serial_device: unknown error %d\n", opts.self, fsta);
+            exit(1);
+        }
+        curr = OPT_NONE;
+        continue;
+      case OPT_RETRIES:
+      case OPT_LOAD:
+      case OPT_CON_BAUD:
+        errno = 0;
+        char *end;
+        nv = strtoull(argv[i], &end, 0);
+        if (*end) {
+          fprintf(stderr,
+                  "%s: couldn't parse %s value: stopped parsing at %c\n",
+                  opts.self,
+                  argv[i - 1],
+                  *end);
+          opts._print_usage = true;
+        } else if (errno) {
+          fprintf(
+            stderr, "%s: couldn't parse %s value: %s\n", opts.self, argv[i - 1], strerror(errno));
+          opts._print_usage = true;
+        } else {
+          if (curr == OPT_LOAD)
+            opts.load_addr = nv;
+          else if (curr == OPT_CON_BAUD) {
+            if (nv > UINT32_MAX) {
+              fprintf(stderr, "%s: console baud rate too large (must be < 2^32)\n", opts.self);
+              opts._print_usage = true;
+            } else {
+              opts.con_baud = nv;
+            }
+          } else if (curr == OPT_RETRIES) {
+            if (nv > UINT8_MAX) {
+              fprintf(stderr, "%s: console baud rate too large (must be < 256)\n", opts.self);
+              opts._print_usage = true;
+            } else {
+              opts.retries = nv;
+            }
           }
         }
-      }
-      curr = OPT_NONE;
-      continue;
-    case OPT_NONE:
-      break;
+        curr = OPT_NONE;
+        continue;
+      case OPT_NONE:
+        break;
     }
     if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help"))
       opts._print_usage = true;
@@ -148,8 +151,12 @@ void parse_opts(int argc, char **argv) {
         r = open(argv[i], O_RDONLY);
 #pragma GCC diagnostic pop
         if (r == -1) {
-          fprintf(stderr, "%s: couldn't open `%s`: %s (%d)\n", opts.self,
-                  argv[i], strerror(errno), errno);
+          fprintf(stderr,
+                  "%s: couldn't open `%s`: %s (%d)\n",
+                  opts.self,
+                  argv[i],
+                  strerror(errno),
+                  errno);
           opts._print_usage = true;
         } else
           opts.inp_fd = r;
@@ -160,20 +167,20 @@ void parse_opts(int argc, char **argv) {
     }
   }
   if (curr != OPT_NONE) {
-    fprintf(stderr, "%s: expected argument after `%s`\n", opts.self,
-            argv[argc - 1]);
+    fprintf(stderr, "%s: expected argument after `%s`\n", opts.self, argv[argc - 1]);
     opts._print_usage = true;
   }
 }
 
-struct opt {
+struct opt
+{
   const char *short_;
   const char *long_;
   const char *help;
   const char *val;
   bool (*parse)(const char *);
 };
-static const struct opt NULL_OPT = {NULL, NULL, NULL, 0, NULL};
+static const struct opt NULL_OPT = { NULL, NULL, NULL, 0, NULL };
 
 // clang-format off
 static const struct opt OPTS[] = {
@@ -191,7 +198,9 @@ static const struct opt OPTS[] = {
 };
 // clang-format on
 
-void print_usage(void) {
+void
+print_usage(void)
+{
   const struct opt *curr;
 
   printf("\x1b[1mP\x1b[0mrogram \x1b[1mUP\x1b[0mloader \"PUP\" "
@@ -204,8 +213,7 @@ void print_usage(void) {
   for (curr = OPTS; memcmp(curr, &NULL_OPT, sizeof *curr); curr++) {
     char buf[20];
     snprintf(buf, sizeof buf, "%s, %s", curr->short_, curr->long_);
-    printf("\t%-20s\x1b[1m%-8s\x1b[0m%s\n", buf, curr->val ? curr->val : "",
-           curr->help);
+    printf("\t%-20s\x1b[1m%-8s\x1b[0m%s\n", buf, curr->val ? curr->val : "", curr->help);
   }
   printf("\n");
   printf("NOTE: DEVICE SPECIFIERS\n");
@@ -219,13 +227,20 @@ void print_usage(void) {
 
 static int total_chunks, last_show;
 
-static void hook_heartbeat(void) {}
+static void
+hook_heartbeat(void)
+{
+}
 
-static void hook_poll_acked(void) {
+static void
+hook_poll_acked(void)
+{
   host_printf(DBG_MIN, "\x1b[35mHOST\x1b[0m: Device responded to poll\n");
 }
 
-static void hook_sent_chunk(uint32_t no) {
+static void
+hook_sent_chunk(uint32_t no)
+{
   uint32_t show, i;
 
   show = 80 * (no + 1) / (total_chunks);
@@ -259,12 +274,16 @@ static void hook_sent_chunk(uint32_t no) {
   last_show = show;
 }
 
-static void hook_all_chunks(void) {
+static void
+hook_all_chunks(void)
+{
   if (opts.debug == DBG_MIN)
     printf("\n");
 }
 
-static void hook_passthru(uint8_t c) {
+static void
+hook_passthru(uint8_t c)
+{
   if (opts.debug < DBG_FULL)
     return;
 
@@ -276,7 +295,9 @@ static void hook_passthru(uint8_t c) {
 
 static uint8_t staging[0xffff];
 
-static uint32_t input_crc(void) {
+static uint32_t
+input_crc(void)
+{
   ssize_t r;
   uint32_t crc;
 
@@ -288,33 +309,43 @@ static uint32_t input_crc(void) {
   }
 
   if (r == -1) {
-    fprintf(stderr, "%s: failed to read from %s: %s (%d)\n", opts.self,
-            opts.inp_path, strerror(errno), errno);
+    fprintf(stderr,
+            "%s: failed to read from %s: %s (%d)\n",
+            opts.self,
+            opts.inp_path,
+            strerror(errno),
+            errno);
     exit(1);
   }
 
   return crc;
 }
 
-bool platform_can_read(void) {
+bool
+platform_can_read(void)
+{
   int available;
   if (ioctl(opts.dev_fd, FIONREAD, &available) == -1) {
-    fprintf(stderr, "%s: failed to get TTY input buffer level: %s (%d)\n",
-            opts.self, strerror(errno), errno);
+    fprintf(stderr,
+            "%s: failed to get TTY input buffer level: %s (%d)\n",
+            opts.self,
+            strerror(errno),
+            errno);
     exit(1);
   }
 
   return available > 0;
 }
 
-uint8_t platform_read(void) {
+uint8_t
+platform_read(void)
+{
   uint8_t buf;
   int r;
   while ((r = read(opts.dev_fd, &buf, 1)) == -1) {
     if (errno == EAGAIN)
       continue;
-    fprintf(stderr, "%s: failed to read from TTY: %s (%d)\n", opts.self,
-            strerror(errno), errno);
+    fprintf(stderr, "%s: failed to read from TTY: %s (%d)\n", opts.self, strerror(errno), errno);
     exit(1);
   }
   if (!r) {
@@ -324,22 +355,49 @@ uint8_t platform_read(void) {
   return buf;
 }
 
-void platform_write(uint8_t c) {
+void
+platform_put(uint8_t c)
+{
   // printf("host: platform_write: '%c' (%d)\n", c, c);
   if (write(opts.dev_fd, &c, 1) == -1) {
-    fprintf(stderr, "%s: failed to write to TTY: %s (%d)\n", opts.self,
-            strerror(errno), errno);
+    fprintf(stderr, "%s: failed to write to TTY: %s (%d)\n", opts.self, strerror(errno), errno);
     exit(1);
   }
 }
 
-uint64_t platform_time(void) {
+void
+platform_write(const uint8_t *p, size_t sz)
+{
+  ssize_t r;
+
+  while(sz) {
+    r = write(opts.dev_fd, p, sz);
+    if (r == -1) {
+      fprintf(stderr, "%s: failed to write to TTY: %s (%d)\n", opts.self, strerror(errno), errno);
+      exit(1);
+    }
+    p += r;
+    sz -= r;
+  }
+}
+
+void
+platform_flush(void)
+{
+  if (tcdrain(opts.dev_fd) == -1) {
+    fprintf(stderr, "%s: failed to flush TTY: %s (%d)\n", opts.self, strerror(errno), errno);
+    exit(1);
+  }
+}
+
+uint64_t
+platform_time(void)
+{
   struct timespec tp;
   uint64_t micros;
 
   if (clock_gettime(CLOCK_MONOTONIC_RAW, &tp) == -1) {
-    fprintf(stderr, "%s: failed to get time: %s (%d)\n", opts.self,
-            strerror(errno), errno);
+    fprintf(stderr, "%s: failed to get time: %s (%d)\n", opts.self, strerror(errno), errno);
     exit(1);
   }
 
@@ -349,20 +407,26 @@ uint64_t platform_time(void) {
   return micros;
 }
 
-bool platform_marshal(size_t chunk_no, uint8_t **data, uint16_t *len) {
+bool
+platform_marshal(size_t chunk_no, uint8_t **data, uint16_t *len)
+{
   ssize_t r;
 
   r = pread(opts.inp_fd, staging, sizeof staging, chunk_no * sizeof staging);
 
   if (r == -1) {
-    fprintf(stderr, "%s: failed to read from %s: %s (%d)\n", opts.self,
-            opts.inp_path, strerror(errno), errno);
+    fprintf(stderr,
+            "%s: failed to read from %s: %s (%d)\n",
+            opts.self,
+            opts.inp_path,
+            strerror(errno),
+            errno);
     exit(1);
   } else if (!r) {
     fprintf(stderr,
-            HOST
-            "ERROR: device requesting chunk %zu which is past the end of %s\n",
-            chunk_no, opts.inp_path);
+            HOST "ERROR: device requesting chunk %zu which is past the end of %s\n",
+            chunk_no,
+            opts.inp_path);
     exit(1);
   } else {
     assert(r > 0 && r < 0x1'0000);
@@ -372,24 +436,32 @@ bool platform_marshal(size_t chunk_no, uint8_t **data, uint16_t *len) {
   }
 }
 
-static size_t host_pread(int fd, void *buf, size_t len, off_t off) {
+static size_t
+host_pread(int fd, void *buf, size_t len, off_t off)
+{
   ssize_t r;
 
   r = pread(opts.inp_fd, buf, 6, 0);
   if (r == -1) {
-    fprintf(stderr, "%s: failed to read from %s: %s (%d)\n", opts.self,
-            opts.inp_path, strerror(errno), errno);
+    fprintf(stderr,
+            "%s: failed to read from %s: %s (%d)\n",
+            opts.self,
+            opts.inp_path,
+            strerror(errno),
+            errno);
     exit(1);
   }
 
   return r;
 }
 
-static bool is_xz_file(int fd) {
+static bool
+is_xz_file(int fd)
+{
   size_t r;
   char magic[6];
 
-  const uint8_t XZ_SIG[6] = {0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00};
+  const uint8_t XZ_SIG[6] = { 0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00 };
 
   r = host_pread(fd, magic, 6, 0);
   if (r < 6) {
@@ -399,7 +471,9 @@ static bool is_xz_file(int fd) {
   }
 }
 
-static bool decompress_xz_partial(int fd, uint8_t *outbuf, size_t nbytes) {
+static bool
+decompress_xz_partial(int fd, uint8_t *outbuf, size_t nbytes)
+{
   lzma_stream strm;
   lzma_ret r;
   size_t s;
@@ -410,23 +484,20 @@ static bool decompress_xz_partial(int fd, uint8_t *outbuf, size_t nbytes) {
   strm = (lzma_stream)LZMA_STREAM_INIT;
   r = lzma_stream_decoder(&strm, UINT64_MAX, LZMA_FAIL_FAST);
   switch (r) {
-  case LZMA_OK:
-    break;
-  case LZMA_MEM_ERROR:
-    fprintf(
-        stderr,
-        "%s: is_elf_file: LZMA_MEM_ERROR when initializing stream decoder\n",
-        opts.self);
-    exit(1);
-  case LZMA_OPTIONS_ERROR:
-    fprintf(stderr, "%s: is_elf_file: unsupported LZMA_FAIL_FAST\n", opts.self);
-    exit(1);
-  case LZMA_PROG_ERROR:
-  default:
-    fprintf(stderr,
-            "%s: is_self_file: lzma_stream_decoder: unexpected error (%d)\n",
-            opts.self, r);
-    exit(1);
+    case LZMA_OK:
+      break;
+    case LZMA_MEM_ERROR:
+      fprintf(
+        stderr, "%s: is_elf_file: LZMA_MEM_ERROR when initializing stream decoder\n", opts.self);
+      exit(1);
+    case LZMA_OPTIONS_ERROR:
+      fprintf(stderr, "%s: is_elf_file: unsupported LZMA_FAIL_FAST\n", opts.self);
+      exit(1);
+    case LZMA_PROG_ERROR:
+    default:
+      fprintf(
+        stderr, "%s: is_self_file: lzma_stream_decoder: unexpected error (%d)\n", opts.self, r);
+      exit(1);
   }
 
   strm.next_in = inbuf;
@@ -437,8 +508,12 @@ static bool decompress_xz_partial(int fd, uint8_t *outbuf, size_t nbytes) {
 
   // Don't know what state `fd` is in, so seek to start of file
   if (lseek(fd, 0, SEEK_SET) == -1) {
-    fprintf(stderr, "%s: failed to rewind %s: %s (%d)\n", opts.self,
-            opts.inp_path, strerror(errno), errno);
+    fprintf(stderr,
+            "%s: failed to rewind %s: %s (%d)\n",
+            opts.self,
+            opts.inp_path,
+            strerror(errno),
+            errno);
     exit(1);
   }
 
@@ -449,8 +524,12 @@ static bool decompress_xz_partial(int fd, uint8_t *outbuf, size_t nbytes) {
       strm.next_in = inbuf;
       s = read(fd, inbuf, sizeof inbuf);
       if (s == -1) {
-        fprintf(stderr, "%s: failed to read from %s: %s (%d)\n", opts.self,
-                opts.inp_path, strerror(errno), errno);
+        fprintf(stderr,
+                "%s: failed to read from %s: %s (%d)\n",
+                opts.self,
+                opts.inp_path,
+                strerror(errno),
+                errno);
         exit(1);
       }
       if (s == 0)
@@ -467,49 +546,50 @@ static bool decompress_xz_partial(int fd, uint8_t *outbuf, size_t nbytes) {
     }
 
     switch (r) {
-    case LZMA_STREAM_END:
-      // Success condition not met, and we hit end-of-stream. Thus: failure.
-      res = false;
-      goto cleanup;
-    case LZMA_OK:
-      // Success condition not met, but not end-of-stream. Thus: continue.
-      break;
+      case LZMA_STREAM_END:
+        // Success condition not met, and we hit end-of-stream. Thus: failure.
+        res = false;
+        goto cleanup;
+      case LZMA_OK:
+        // Success condition not met, but not end-of-stream. Thus: continue.
+        break;
 
-    // TODO: I don't think this actually comes up in this modality?
-    case LZMA_SEEK_NEEDED:
-      if (lseek(fd, strm.seek_pos, SEEK_SET) == -1) {
-        fprintf(stderr, "%s: failed to seek %s (%" PRIi64 "): %s (%d)\n",
-                opts.self, opts.inp_path, strm.seek_pos, strerror(errno),
-                errno);
+      // TODO: I don't think this actually comes up in this modality?
+      case LZMA_SEEK_NEEDED:
+        if (lseek(fd, strm.seek_pos, SEEK_SET) == -1) {
+          fprintf(stderr,
+                  "%s: failed to seek %s (%" PRIi64 "): %s (%d)\n",
+                  opts.self,
+                  opts.inp_path,
+                  strm.seek_pos,
+                  strerror(errno),
+                  errno);
+          exit(1);
+        }
+        strm.avail_in = 0;
+        break;
+      case LZMA_FORMAT_ERROR:
+        fprintf(stderr, "%s: %s is not in the .xz format\n", opts.self, opts.inp_path);
         exit(1);
-      }
-      strm.avail_in = 0;
-      break;
-    case LZMA_FORMAT_ERROR:
-      fprintf(stderr, "%s: %s is not in the .xz format\n", opts.self,
-              opts.inp_path);
-      exit(1);
-    case LZMA_OPTIONS_ERROR:
-      fprintf(stderr,
-              "%s: %s has .xz headers that are not supported by this liblzma "
-              "version\n",
-              opts.self, opts.inp_path);
-      exit(1);
-    case LZMA_DATA_ERROR:
-      fprintf(stderr, "%s: %s is corrupt\n", opts.self, opts.inp_path);
-      exit(1);
-    case LZMA_MEM_ERROR:
-      fprintf(stderr, "%s: is_elf_file: lzma_code: LZMA_MEM_ERROR\n",
-              opts.self);
-      exit(1);
-    case LZMA_BUF_ERROR:
-      fprintf(stderr, "%s: %s is truncated or otherwise corrupt\n", opts.self,
-              opts.inp_path);
-      exit(1);
-    default:
-      fprintf(stderr, "%s: is_elf_file: lzma_code: unexpected error (%d)\n",
-              opts.self, r);
-      exit(1);
+      case LZMA_OPTIONS_ERROR:
+        fprintf(stderr,
+                "%s: %s has .xz headers that are not supported by this liblzma "
+                "version\n",
+                opts.self,
+                opts.inp_path);
+        exit(1);
+      case LZMA_DATA_ERROR:
+        fprintf(stderr, "%s: %s is corrupt\n", opts.self, opts.inp_path);
+        exit(1);
+      case LZMA_MEM_ERROR:
+        fprintf(stderr, "%s: is_elf_file: lzma_code: LZMA_MEM_ERROR\n", opts.self);
+        exit(1);
+      case LZMA_BUF_ERROR:
+        fprintf(stderr, "%s: %s is truncated or otherwise corrupt\n", opts.self, opts.inp_path);
+        exit(1);
+      default:
+        fprintf(stderr, "%s: is_elf_file: lzma_code: unexpected error (%d)\n", opts.self, r);
+        exit(1);
     }
   }
 
@@ -518,28 +598,32 @@ cleanup:
   return res;
 }
 
-static bool is_elf_file(int fd, enum compression_type compression_type) {
+static bool
+is_elf_file(int fd, enum compression_type compression_type)
+{
   size_t s;
   char magic[4];
 
   switch (compression_type) {
-  case COMPRESS_NONE:
-    s = host_pread(fd, magic, 4, 0);
-    if (s < 4)
-      return false;
-    break;
-  case COMPRESS_XZ:
-    if (!decompress_xz_partial(fd, (uint8_t *)magic, sizeof magic))
-      return false;
-    break;
-  default:
-    __builtin_unreachable();
+    case COMPRESS_NONE:
+      s = host_pread(fd, magic, 4, 0);
+      if (s < 4)
+        return false;
+      break;
+    case COMPRESS_XZ:
+      if (!decompress_xz_partial(fd, (uint8_t *)magic, sizeof magic))
+        return false;
+      break;
+    default:
+      __builtin_unreachable();
   }
 
   return !memcmp(ELFMAG, magic, 4);
 }
 
-static size_t xz_uncompressed_size(int fd, size_t len) {
+static size_t
+xz_uncompressed_size(int fd, size_t len)
+{
   // Based on
   // https://github.com/tukaani-project/xz/blob/master/doc/examples/11_file_info.c
 
@@ -552,28 +636,33 @@ static size_t xz_uncompressed_size(int fd, size_t len) {
   strm = (lzma_stream)LZMA_STREAM_INIT;
   r = lzma_file_info_decoder(&strm, &index, UINT64_MAX, len);
   switch (r) {
-  case LZMA_OK:
-    break;
-  case LZMA_MEM_ERROR:
-    fprintf(stderr,
-            "%s: xz_uncompressed_size: LZMA_MEM_ERROR when initializing file "
-            "info decoder\n",
-            opts.self);
-    exit(1);
-  case LZMA_PROG_ERROR:
-  default:
-    fprintf(stderr,
-            "%s: xz_uncompressed_size: lzma_file_info_decoder: unknown error "
-            "(%d)\n",
-            opts.self, r);
-    exit(1);
+    case LZMA_OK:
+      break;
+    case LZMA_MEM_ERROR:
+      fprintf(stderr,
+              "%s: xz_uncompressed_size: LZMA_MEM_ERROR when initializing file "
+              "info decoder\n",
+              opts.self);
+      exit(1);
+    case LZMA_PROG_ERROR:
+    default:
+      fprintf(stderr,
+              "%s: xz_uncompressed_size: lzma_file_info_decoder: unknown error "
+              "(%d)\n",
+              opts.self,
+              r);
+      exit(1);
   }
 
   strm.avail_in = 0;
 
   if (lseek(fd, 0, SEEK_SET) == -1) {
-    fprintf(stderr, "%s: failed to rewind %s: %s (%d)\n", opts.self,
-            opts.inp_path, strerror(errno), errno);
+    fprintf(stderr,
+            "%s: failed to rewind %s: %s (%d)\n",
+            opts.self,
+            opts.inp_path,
+            strerror(errno),
+            errno);
     exit(1);
   }
 
@@ -582,8 +671,12 @@ static size_t xz_uncompressed_size(int fd, size_t len) {
       strm.next_in = inbuf;
       s = read(fd, inbuf, sizeof inbuf);
       if (s == -1) {
-        fprintf(stderr, "%s: failed to read from %s: %s (%d)\n", opts.self,
-                opts.inp_path, strerror(errno), errno);
+        fprintf(stderr,
+                "%s: failed to read from %s: %s (%d)\n",
+                opts.self,
+                opts.inp_path,
+                strerror(errno),
+                errno);
         exit(1);
       }
       strm.avail_in = s;
@@ -592,46 +685,50 @@ static size_t xz_uncompressed_size(int fd, size_t len) {
     r = lzma_code(&strm, LZMA_RUN);
 
     switch (r) {
-    case LZMA_OK:
-      break;
-    case LZMA_SEEK_NEEDED:
-      if (lseek(fd, strm.seek_pos, SEEK_SET) == -1) {
-        fprintf(stderr, "%s: failed to seek %s (%" PRIi64 "): %s (%d)\n",
-                opts.self, opts.inp_path, strm.seek_pos, strerror(errno),
-                errno);
+      case LZMA_OK:
+        break;
+      case LZMA_SEEK_NEEDED:
+        if (lseek(fd, strm.seek_pos, SEEK_SET) == -1) {
+          fprintf(stderr,
+                  "%s: failed to seek %s (%" PRIi64 "): %s (%d)\n",
+                  opts.self,
+                  opts.inp_path,
+                  strm.seek_pos,
+                  strerror(errno),
+                  errno);
+          exit(1);
+        }
+        strm.avail_in = 0;
+        break;
+      case LZMA_STREAM_END:
+        return lzma_index_uncompressed_size(index);
+      case LZMA_FORMAT_ERROR:
+        fprintf(stderr, "%s: %s is not in the .xz format\n", opts.self, opts.inp_path);
         exit(1);
-      }
-      strm.avail_in = 0;
-      break;
-    case LZMA_STREAM_END:
-      return lzma_index_uncompressed_size(index);
-    case LZMA_FORMAT_ERROR:
-      fprintf(stderr, "%s: %s is not in the .xz format\n", opts.self,
-              opts.inp_path);
-      exit(1);
-    case LZMA_OPTIONS_ERROR:
-      fprintf(stderr,
-              "%s: %s has .xz headers that are not supported by this liblzma "
-              "version\n",
-              opts.self, opts.inp_path);
-      exit(1);
-    case LZMA_DATA_ERROR:
-      fprintf(stderr, "%s: %s is corrupt\n", opts.self, opts.inp_path);
-      exit(1);
-    case LZMA_MEM_ERROR:
-      fprintf(stderr, "%s: xz_uncompressed_size: lzma_code: LZMA_MEM_ERROR\n",
-              opts.self);
-      exit(1);
-    default:
-      fprintf(stderr,
-              "%s: xz_uncompressed_size: lzma_code: unexpected error (%d)\n",
-              opts.self, r);
-      exit(1);
+      case LZMA_OPTIONS_ERROR:
+        fprintf(stderr,
+                "%s: %s has .xz headers that are not supported by this liblzma "
+                "version\n",
+                opts.self,
+                opts.inp_path);
+        exit(1);
+      case LZMA_DATA_ERROR:
+        fprintf(stderr, "%s: %s is corrupt\n", opts.self, opts.inp_path);
+        exit(1);
+      case LZMA_MEM_ERROR:
+        fprintf(stderr, "%s: xz_uncompressed_size: lzma_code: LZMA_MEM_ERROR\n", opts.self);
+        exit(1);
+      default:
+        fprintf(
+          stderr, "%s: xz_uncompressed_size: lzma_code: unexpected error (%d)\n", opts.self, r);
+        exit(1);
     }
   }
 }
 
-int main(int argc, char **argv) {
+int
+main(int argc, char **argv)
+{
   size_t inp_size, wire_size;
   uint32_t inp_crc;
   struct stat st;
@@ -649,29 +746,25 @@ int main(int argc, char **argv) {
   if (opts.dev_fd == -1) {
     fsta = find_serial_device(NULL, &opts.dev_fd, BAUD_RATE);
     switch (fsta) {
-    case FIND_OK:
-      break;
-    case FIND_NXDEV:
-      fprintf(stderr,
-              "%s: USB enumeration failed to find usable serial modem\n",
-              opts.self);
-      exit(1);
-    case FIND_NOT_CHR:
-      fprintf(stderr, "%s: %s is not a character device\n", opts.self,
-              opts.dev_path);
-      exit(1);
-    case FIND_OPEN_FAIL:
-      fprintf(stderr, "%s: Failed to open %s\n", opts.self, opts.dev_path);
-      exit(1);
-    default:
-      fprintf(stderr, "%s: find_serial_device: Unknown error %d\n", opts.self,
-              fsta);
-      exit(1);
+      case FIND_OK:
+        break;
+      case FIND_NXDEV:
+        fprintf(stderr, "%s: USB enumeration failed to find usable serial modem\n", opts.self);
+        exit(1);
+      case FIND_NOT_CHR:
+        fprintf(stderr, "%s: %s is not a character device\n", opts.self, opts.dev_path);
+        exit(1);
+      case FIND_OPEN_FAIL:
+        fprintf(stderr, "%s: Failed to open %s\n", opts.self, opts.dev_path);
+        exit(1);
+      default:
+        fprintf(stderr, "%s: find_serial_device: Unknown error %d\n", opts.self, fsta);
+        exit(1);
     }
   }
 
-  if(opts.reset_tianleboard) {
-    if(RS_FAIL == reset_tianleboard(opts.dev_fd)) {
+  if (opts.reset_tianleboard) {
+    if (RS_FAIL == reset_tianleboard(opts.dev_fd)) {
       fprintf(stderr, "%s: Failed to reset Tianleboard\n", opts.self);
       exit(1);
     }
@@ -679,8 +772,8 @@ int main(int argc, char **argv) {
   }
 
   if (fstat(opts.inp_fd, &st) == -1) {
-    fprintf(stderr, "%s: failed to stat %s: %s (%d)\n", opts.self,
-            opts.inp_path, strerror(errno), errno);
+    fprintf(
+      stderr, "%s: failed to stat %s: %s (%d)\n", opts.self, opts.inp_path, strerror(errno), errno);
     return EXIT_FAILURE;
   }
   wire_size = st.st_size;
@@ -690,9 +783,7 @@ int main(int argc, char **argv) {
 
   compress = COMPRESS_NONE;
   if (is_xz_file(opts.inp_fd)) {
-    host_printf(DBG_MIN,
-                HOST "%s is XZ-compressed, switching compression modes\n",
-                opts.inp_path);
+    host_printf(DBG_MIN, HOST "%s is XZ-compressed, switching compression modes\n", opts.inp_path);
     compress = COMPRESS_XZ;
     inp_size = xz_uncompressed_size(opts.inp_fd, wire_size);
     host_printf(DBG_MIN, HOST "%s inflates to %zuB\n", opts.inp_path, inp_size);
@@ -701,12 +792,10 @@ int main(int argc, char **argv) {
   }
 
   if (is_elf_file(opts.inp_fd, compress)) {
-    host_printf(DBG_MIN, HOST "%s is an ELF file, switching image format\n",
-                opts.inp_path);
+    host_printf(DBG_MIN, HOST "%s is an ELF file, switching image format\n", opts.inp_path);
     image_format = IMAGE_ELF;
     if (opts.load_addr != UINT64_MAX) {
-      fprintf(stderr, "%s: Cannot specify -a/--addr for ELF files\n",
-              opts.self);
+      fprintf(stderr, "%s: Cannot specify -a/--addr for ELF files\n", opts.self);
       exit(1);
     }
   } else {
@@ -716,28 +805,28 @@ int main(int argc, char **argv) {
   }
 
   meta_t meta = {
-      .image_format = image_format,
-      .compression_type = compress,
-      .wire_size = wire_size,
-      .mem_size = inp_size,
-      .mem_crc32 = inp_crc,
+    .image_format = image_format,
+    .compression_type = compress,
+    .wire_size = wire_size,
+    .mem_size = inp_size,
+    .mem_crc32 = inp_crc,
   };
   switch (image_format) {
-  case IMAGE_FLAT_BINARY:
-    meta.format_metadata.flat_binary_metadata.load_addr = opts.load_addr;
-    break;
-  case IMAGE_ELF:
-    static_assert(sizeof(elf32_meta_t) == 0);
-    break;
-  default:
-    __builtin_unreachable();
+    case IMAGE_FLAT_BINARY:
+      meta.format_metadata.flat_binary_metadata.load_addr = opts.load_addr;
+      break;
+    case IMAGE_ELF:
+      static_assert(sizeof(elf32_meta_t) == 0);
+      break;
+    default:
+      __builtin_unreachable();
   }
   struct uploader_hooks hooks = {
-      .on_heartbeat = hook_heartbeat,
-      .on_poll_acked = hook_poll_acked,
-      .on_sent_chunk = hook_sent_chunk,
-      .on_passthru = hook_passthru,
-      .on_all_chunks = hook_all_chunks,
+    .on_heartbeat = hook_heartbeat,
+    .on_poll_acked = hook_poll_acked,
+    .on_sent_chunk = hook_sent_chunk,
+    .on_passthru = hook_passthru,
+    .on_all_chunks = hook_all_chunks,
   };
 
   uint64_t t0, t1;
@@ -746,19 +835,19 @@ int main(int argc, char **argv) {
   t1 = platform_time();
 
   switch (sta) {
-  case UPLOAD_OK:
-    host_printf(DBG_MIN, HOST "Device booted succcessfully!\n");
-    host_printf(DBG_MIN, HOST "Upload took %'dms.\n", (t1 - t0) / 1000);
-    break;
-  case UPLOAD_TIMEOUT:
-    host_printf(DBG_MIN, HOST "Timed out trying to upload program!\n");
-    return EXIT_FAILURE;
-  case UPLOAD_FAILED:
-    host_printf(DBG_MIN, HOST "Final pre-boot verification failed!\n");
-    return EXIT_FAILURE;
-  default:
-    fprintf(stderr, "%s: unknown status from fsm_upload: %d\n", opts.self, sta);
-    exit(1);
+    case UPLOAD_OK:
+      host_printf(DBG_MIN, HOST "Device booted succcessfully!\n");
+      host_printf(DBG_MIN, HOST "Upload took %'dms.\n", (t1 - t0) / 1000);
+      break;
+    case UPLOAD_TIMEOUT:
+      host_printf(DBG_MIN, HOST "Timed out trying to upload program!\n");
+      return EXIT_FAILURE;
+    case UPLOAD_FAILED:
+      host_printf(DBG_MIN, HOST "Final pre-boot verification failed!\n");
+      return EXIT_FAILURE;
+    default:
+      fprintf(stderr, "%s: unknown status from fsm_upload: %d\n", opts.self, sta);
+      exit(1);
   }
 
   if (!opts.headless) {
@@ -766,11 +855,16 @@ int main(int argc, char **argv) {
 
     char baud_string[32];
     snprintf(baud_string, sizeof baud_string, "%" PRIi32, opts.con_baud);
-    execlp("picocom", "picocom", "--noreset", "--imap=lfcrlf", "-b",
-           baud_string, opts.dev_path, (char *)NULL);
+    execlp("picocom",
+           "picocom",
+           "--noreset",
+           "--imap=lfcrlf",
+           "-b",
+           baud_string,
+           opts.dev_path,
+           (char *)NULL);
 
-    fprintf(stderr, "%s: failed to start picocom: %s (%d)\n", opts.self,
-            strerror(errno), errno);
+    fprintf(stderr, "%s: failed to start picocom: %s (%d)\n", opts.self, strerror(errno), errno);
     return EXIT_FAILURE;
   }
 
