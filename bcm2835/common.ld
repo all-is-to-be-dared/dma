@@ -16,6 +16,7 @@ SECTIONS {
     __exec_end = .;
   }
   .rodata : {
+    __rodata_start = .;
     . = ALIGN(__WORD_ALIGN);
     *(.rodata*)
     . = ALIGN(__WORD_ALIGN);
@@ -26,8 +27,10 @@ SECTIONS {
     __inittab_end = .;
 
     . = ALIGN(__WORD_ALIGN);
+    __rodata_end = .;
   }
   .data : {
+    __data_start = .;
     . = ALIGN(__WORD_ALIGN);
     *(.data*)
     . = ALIGN(__WORD_ALIGN);
@@ -47,10 +50,11 @@ SECTIONS {
     KEEP(*(.dma.tables*))
     __dma_tables_end = .;
     . = ALIGN(__WORD_ALIGN);
+    __data_end = .;
   }
   .bss : {
-    . = ALIGN(__WORD_ALIGN);
     __bss_start = .;
+    . = ALIGN(__WORD_ALIGN);
     *(.bss*)
     *(COMMON)
     . = ALIGN(__WORD_ALIGN);

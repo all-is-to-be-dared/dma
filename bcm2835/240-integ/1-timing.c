@@ -13,7 +13,7 @@
 #include <generic/backtrace.h>
 #include <generic/macros.h>
 
-#include "integ.h"
+#include <bcm2835/240-integ/integ.h>
 
 // uint32_t
 // xxh32(uint32_t seed, const void *p, size_t sz);
@@ -109,7 +109,7 @@ main(struct elf_boot_args *boot_args)
   for (i = 0; i < N; i++) {
     us0 = systmr_read_raw();
     cycle_count_write(0);
-    hash = memory_hash(0, p, ep);
+    hash = hash_memory(0, p, ep);
     c = cycle_count_read();
     us1 = systmr_read_raw();
     dus = us1 - us0;

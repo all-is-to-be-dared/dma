@@ -1,8 +1,11 @@
 #pragma once
 
 #include <stdint.h>
-#include "bcm2835/platform.h"
-#include "bcm2835/extra.h"
+
+#include <bcm2835/platform.h>
+
+#include <generic/assert.h>
+#include <time.h>
 
 
 
@@ -106,10 +109,14 @@ typedef struct
 enum
 {
   TI_2DMODE = 1 << 1,
+
   TI_DST_INC = 1 << 4,
   TI_DST_INC_WIDE128 = 1 << 5,
+  TI_DST_IGN = 1 << 7,
+
   TI_SRC_INC = 1 << 8,
   TI_SRC_INC_WIDE128 = 1 << 9,
+  TI_SRC_IGN = 1 << 11,
 };
 
 static inline uint32_t
@@ -230,6 +237,9 @@ struct dma_run_info
 struct dma_run_info
 __dma_timed_run(hw_dmachan_t* chan, cblk* init_blk);
 
+uint64_t
+dma_run_info_get_time_ns(struct dma_run_info);
+
 
 
 
@@ -276,58 +286,6 @@ dmakit_timed_run(struct dmakit_reservation rsv, cblk* init_blk);
 
 
 /* -------------------------------------------------------------------------------------------------
-   INTEGRITY CHECKING */
-
-
-
-
-// One of the things that one needs to be careful with when using DMA this extensively is to ensure
-// that memory corruption does not occur. To this end, we have an 'integrity checking' system in
-// place, that allows recording the checksums of certain regions of memory and then checking later
-// if the regions have changed. This allows a crude check to ensure that the DMA isn't scribbling
-// on the walls.
-
-
-
-
-// XXX: If guards are inside a guarded region, then they need to be processed before the guards of
-//      enclosing regions, otherwise false positives may occur.
-struct guard
-{
-  // Next guard in the guard chain
-  struct guard* next;
-  // Pointer to region
-  volatile uint8_t* ptr;
-  // Size (in bytes) of region.
-  size_t size;
-  // CRC of the guarded region
-  uint32_t crc;
-  // FCS of the guard itself: if the CRC in the guard disagrees with the calculated one, then we
-  // want to be able to tell whether the guard is wrong, or if memory is wrong.
-  //
-  // This is calculated from _all_ fields of the guard.
-  uint16_t fcs;
-};
-
-void
-guard_chain_init(void);
-void
-guard_chain_add(struct guard* g);
-void
-guard_chain_reset(void);
-
-// Records the current state of memory into the guard chain.
-void
-guard_chain_update(void);
-// Check the current state of memory against the guard chain.
-// Returns `true` if they match, `false` otherwise.
-bool
-guard_chain_check(bool print_diagnostics);
-
-
-
-
-/* -------------------------------------------------------------------------------------------------
    INITIALIZERS */
 
 
@@ -343,10 +301,10 @@ void
 run_initializers(void);
 
 #define INITIALIZER(_name)                                                     \
-  void _name(void);                                                            \
+  void __init_##_name(void);                                                            \
   [[gnu::used, gnu::section(".inittab")]]                                      \
-  const struct initializer _Init__##_name = { .name = #_name, .func = _name }; \
-  void _name(void)
+  const struct initializer _Init__##_name = { .name = #_name, .func = __init_##_name }; \
+  void __init_##_name(void)
 
 
 

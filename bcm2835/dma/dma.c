@@ -1,7 +1,9 @@
-#include <bcm2835-dma/private.h>
 #include <bcm2835/platform.h>
 #include <bcm2835/extra.h>
 #include <bcm2835/arch.h>
+
+#include <bcm2835/dma/private.h>
+
 #include <generic/bits.h>
 #include <generic/printf.h>
 
@@ -42,7 +44,7 @@ __dma_timed_run(hw_dmachan_t* chan, cblk* init_blk)
   chan->cs = DMA_CS_START;
 
   while (__dma_is_active(chan))
-    ;
+    __asm__ volatile("mcr p15, 0, %0, c7, c10, 4;" :: "r"(0));
 
   cycle_end = cycle_count_read();
   us_end = systmr_read_raw();

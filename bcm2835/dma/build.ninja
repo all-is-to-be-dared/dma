@@ -1,0 +1,42 @@
+c = bcm2835/dma/
+
+
+
+
+# --------------------------------------------------------------------------------------------------
+# COMMON SOURCES
+
+build $c/arith.o: arm_cc $c/arith.c
+build $c/arith_int.o: arm_cc $c/arith_int.c
+# build $c/arith_mul.o: arm_cc $c/arith_mul.c
+# build $c/arith_udv.o: arm_cc $c/arith_udv.c
+# build $c/arith_sdv.o: arm_cc $c/arith_sdv.c
+build $c/arith_bit.o: arm_cc $c/arith_bit.c
+build $c/arith_sxx.o: arm_cc $c/arith_sxx.c
+build $c/arith_cmp.o: arm_cc $c/arith_cmp.c
+
+  
+build $c/dma.o: arm_cc $c/dma.c
+build $c/dmakit.o: arm_cc $c/dmakit.c
+build $c/private.o: arm_cc $c/private.c
+build $c/libdma.a: arm_mklib $c/dma.o $c/dmakit.o $c/private.o $c/arith.o $
+    $c/arith_int.o $
+    $c/arith_bit.o $
+    $c/arith_sxx.o $
+    $c/arith_cmp.o
+
+
+
+
+# --------------------------------------------------------------------------------------------------
+# TARGET: 2-arith-test
+
+build $c/2-arith-test.elf.xz: arm_xz $c/2-arith-test.elf
+build $c/2-arith-test.elf: arm_link $c/2-arith-test.o $c/libdma.a $
+  bcm2835/libplatform.a bcm2835/libc.a | bcm2835/common.ld
+  ldflags_ext = -Tbcm2835/common.ld
+  libs = bcm2835/libgcc.a
+build $c/2-arith-test.o: arm_cc $c/2-arith-test.c
+
+default $c/2-arith-test.elf.xz
+

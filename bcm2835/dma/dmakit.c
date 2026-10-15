@@ -1,6 +1,6 @@
 #include <string.h>
 
-#include <bcm2835-dma/private.h>
+#include <bcm2835/dma/private.h>
 #include <bcm2835/platform.h>
 #include <bcm2835/extra.h>
 #include <bcm2835/ptags.h>

@@ -31,8 +31,8 @@ default $c/1-timing.elf.xz
 
 build $c/2-integ.elf.xz: arm_xz $c/2-integ.elf
 build $c/2-integ.elf: arm_link $c/2-integ.o $c/hash.o bcm2835/libplatform.a bcm2835/libc.a $
-                      | bcm2835/common.ld
-  ldflags_ext = -Tbcm2835/common.ld
+                      | bcm2835/240-integ/integ.ld
+  ldflags_ext = -Tbcm2835/240-integ/integ.ld
   libs = bcm2835/libgcc.a
 build $c/2-integ.o: arm_cc $c/2-integ.c
 

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <string.h>
-#include <bcm2835-dma/private.h>
+#include <bcm2835/dma/private.h>
 
 /* -------------------------------------------------------------------------------------------------
    BUS ADDRESS MANIPULATION */

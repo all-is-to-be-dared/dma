@@ -4,11 +4,19 @@
 [[noreturn]]
 void _start() {
   __asm__ (
+    // enable VFP
+    "mrc p15, 0, r0, c1, c0, 2\n"
+    "orr r0, r0, #0xf00000\n" // single + double precision
+    "mcr p15, 0, r0, c1, c0, 2\n"
+    "mov r0, #0x40000000\n"
+    "fmxr fpexc, r0\n"
+
     "mrs r1, cpsr\n"
     "and r1, r1, #(~0x1f)\n"
     "orr r1, r1, #0x13\n"
     "orr r1, r1, #((1 << 7) | (1 << 6))\n"
     "msr cpsr, r1\n"
+
 
     "mov r1, #0\n"
     "mcr p15, 0, r1, c7, c5, 4\n"

@@ -1,5 +1,7 @@
-#include <bcm2835-dma/private.h>
 #include <string.h>
+
+#include <bcm2835/dma/private.h>
+#include <bcm2835/dma/emit.h>
 
 #include <generic/printf.h>
 
@@ -121,7 +123,6 @@ _mono_set(struct mono_ctx* c, void* k, void* d)
 
 
 static uint8_t alignas(1 << 16) ARENA_BACKING[1 << 16];
-#include <bcm2835-dma/emit.h>
 arena ARENA = {
   .start = ARENA_BACKING,
   .p = ARENA_BACKING,
@@ -174,4 +175,45 @@ void
 ClearProbes(void)
 {
   probecnt = 0;
+}
+
+
+
+
+#include <bcm2835/ptags.h>
+
+uint64_t dma_run_info_get_time_ns(struct dma_run_info info)
+{
+  // cycle_start, cycle_end gives 10^9 / ARMFREQ units (mod 2^32)
+  // us_start, us_end gives microseconds (mod 2^64)
+  // we only worry about the modulus on the first one
+
+  // note: want measured for this and not nominal
+
+  // kinda stupid but it works (?)
+  // assumption: clock is multiple of 1MHz
+  (void)ptag_get_measured_clock_rate(PCID_ARM);
+  (void)ptag_get_measured_clock_rate(PCID_ARM);
+  (void)ptag_get_measured_clock_rate(PCID_ARM);
+  (void)ptag_get_measured_clock_rate(PCID_ARM);
+  (void)ptag_get_measured_clock_rate(PCID_ARM);
+  uint32_t arm_freq = (ptag_get_measured_clock_rate(PCID_ARM) + 999'999) / 1'000'000 * 1'000'000;
+
+  uint64_t k, T, DC, dm;
+
+  DC = info.cycle_end - info.cycle_start;
+  dm = info.us_end - info.us_start;
+  if(dm) {
+    k = dm * arm_freq / 1'000'000 - DC;
+    k >>= 31;
+    k = (k >> 1) + (k & 1);
+  } else {
+    k = 0;
+  }
+
+  T = DC + (k << 32);
+  T *= 1'000'000'000;
+  T /= arm_freq;
+
+  return T;
 }

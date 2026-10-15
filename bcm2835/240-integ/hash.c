@@ -45,7 +45,7 @@ enum
 /// XXX: Designed to run at DRAM speed on the BCM2835, it's essentially a three-lane restriping of
 ///      Yann Collet's XXH32 algorithm (https://github.com/cyan4973/xxhash).
 uint32_t
-memory_hash(const void *seed_ptr, const void *p, const size_t sz)
+hash_memory(const void *seed_ptr, const void *p, const size_t sz)
 {
   // algorithm: three-lane version of XXH32, with a preload stage for alignment
   // note that the preload stage makes the hash value dependent on the alignment-offset (mod 16) of
@@ -120,8 +120,7 @@ memory_hash(const void *seed_ptr, const void *p, const size_t sz)
     register const uint8_t *_stop_block asm("r14") = stop_block;
     __asm__(
       "push {r4-r12, r14}\n"
-      "adr r7, 3f\n"
-      "str sp, [r7]\n"
+      "mcr p15, 0, sp, c13, c0, 2\n"
       "mov r12, r4\n"
       "mov r13, r5\n"
 
@@ -190,11 +189,7 @@ memory_hash(const void *seed_ptr, const void *p, const size_t sz)
 
       "mov r4, r12;\n"
       "mov r5, r13;\n"
-      "adr r7, 3f;\n"
-      "ldr sp, [r7];\n"
-      "b 4f;\n"
-      "3: .word 0\n"
-      "4:\n"
+      "mrc p15, 0, sp, c13, c0, 2\n"
       "pop {r4-r12, r14};\n"
 
       : [dat] "+r"(data),
