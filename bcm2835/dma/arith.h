@@ -24,7 +24,7 @@ enum
   // available: 0f
 
   HYPER_SLL = 0x14, // 8
-  HYPER_ADD_R = 0x1c, // 4
+  // available: 1c-1f
 
   HYPER_SRL = 0x24, // 8
 
@@ -33,10 +33,13 @@ enum
 
   HYPER_GES = 0x34, // 4
 
-  HYPER_MUL = 0x38 // 2
+  HYPER_MUL = 0x38, // 2
   // available: 3a-3f
 
-  // available: 40 onwards, except x0-x3
+  // available: 44-47
+  HYPER_ADD_R = 0x48, // 8
+
+  // available: 50 onwards, except x0-x3
 };
 enum {
   SUPER_INC = 0x00, // 4
