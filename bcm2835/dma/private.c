@@ -43,51 +43,45 @@ struct mono
   struct mono* next;
 };
 
-struct mono_ctx
-{
-  long instance;
-  size_t keysz;
-  size_t valsz;
-  struct mono* monos;
-  struct mono_ctx* next;
-};
-
 enum
 {
   MAX_MONO = 1024,
-  MAX_CONTEXT = 256,
+  // MAX_CONTEXT = 256,
 };
 static struct mono MONOS[MAX_MONO];
-static struct mono_ctx CONTEXTS[MAX_CONTEXT];
-static size_t curr_mono = 0, curr_context = 0;
+// static struct mono_ctx CONTEXTS[MAX_CONTEXT];
+static size_t curr_mono = 0;
+// static size_t curr_context = 0;
 
-struct mono_ctx* mono_root = NULL;
+// struct mono_ctx* mono_root = NULL;
 
-struct mono_ctx*
-_mono_get_or_init_ctx(long i, size_t ks, size_t vs)
+void
+_mono_get_or_init_ctx(struct mono_ctx *c, size_t ks, size_t vs)
 {
-  struct mono_ctx* c;
+  // struct mono_ctx* c;
 
   // printf("[%s:%ld,%zu,%zu]\n", __PRETTY_FUNCTION__, i, ks, vs);
 
-  c = mono_root;
-  while (c) {
-    if (c->instance == i)
-      return c;
-    c = c->next;
-  }
+  // c = mono_root;
+  // while (c) {
+  //   if (c->instance == i)
+  //     return c;
+  //   c = c->next;
+  // }
+  if(!c->inited)
+    c->inited = true;
 
   // printf("!context not found!\n");
-  assert(curr_context < MAX_CONTEXT);
-  c = CONTEXTS + curr_context++;
-  c->instance = i;
+  // assert(curr_context < MAX_CONTEXT);
+  // c = CONTEXTS + curr_context++;
+  // c->instance = i;
   c->keysz = ks;
   c->valsz = vs;
   c->monos = NULL;
-  c->next = mono_root;
-  mono_root = c;
+  // c->next = mono_root;
+  // mono_root = c;
 
-  return c;
+  // return c;
 }
 
 bool
@@ -117,6 +111,8 @@ _mono_set(struct mono_ctx* c, void* k, void* d)
 
   assert(curr_mono < MAX_MONO);
   m = MONOS + curr_mono++;
+  m->key = arena_alloc(&ARENA, c->keysz, 4); // arbitrary align
+  m->val = arena_alloc(&ARENA, c->valsz, 4); // arbitrary align
   memcpy(m->key, k, c->keysz);
   memcpy(m->val, d, c->valsz);
   m->next = c->monos;

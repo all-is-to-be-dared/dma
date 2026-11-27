@@ -288,7 +288,7 @@ typedef struct {
 
 static inline arena mk_arena(void *start, void *end)
 {
-  assert(start >= end, "Arena cannot end before it begins");
+  assert(start <= end, "Arena cannot end before it begins");
   return (arena) { start, end, start, 0 };
 }
 
@@ -303,7 +303,7 @@ static inline void *arena_alloc(arena *a, size_t size, size_t align)
   q = (q + align - 1) & (-align);
   r = q + size;
 
-  if(r >= (uintptr_t)a->end || r < (uintptr_t)a->start)
+  if(r > (uintptr_t)a->end || r < (uintptr_t)a->start)
     panic("arena_alloc: arena [%p,%p) ran out of space: allocating %zu/%zu on %p would overflow\n",
       a->start, a->end, size, align, a->p);
 

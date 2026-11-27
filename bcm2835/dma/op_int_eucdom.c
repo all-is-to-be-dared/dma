@@ -499,7 +499,7 @@ INITIALIZER(sdiv_equzb4)
 void
 SDiv32(emit_ctx *ctx, busad quot, busad rem, busad a32, busad b32)
 {
-  struct SDiv32_Tables *tables = MonomorphizeOn(0, arena_alloc(&ARENA, sizeof *tables, 1 << 16));
+  struct SDiv32_Tables *tables = arena_alloc(&ARENA, sizeof *tables, 1 << 16);
   memset(tables, 0, sizeof *tables);
 
   cblk *_xa_to_sign_table, *_xb_to_sign_table, *_xa_to_rem_sign_table, *_bz_to_qzero_table;

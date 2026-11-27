@@ -102,7 +102,7 @@ INITIALIZER(rv_regmaps)
   SUPER[0 << 8 | SUPERV_RegisterMapRead] = 0;
   SUPER[0 << 8 | SUPERV_RegisterMapWrite] = 128;
   for (size_t i = 1; i < 32; i++) {
-    SUPER[i] = 4 * i;
+    // SUPER[i] = 4 * i;
     SUPER[i << 8 | SUPERV_RegisterMapRead] = 4 * i;
     SUPER[i << 8 | SUPERV_RegisterMapWrite] = 4 * i;
   }
@@ -283,10 +283,11 @@ RVTrapEntry(emit_ctx *ctx)
   busad $trap_save_priv = Label(ctx);
   Emit(ctx, bus_rel_fld($trap_save_priv, +1, FLD_SRC, 2), bus_(&RV->MSTATUS, 1), 1);
   Emit(ctx,
-       bus_rel_fld($trap_save_priv, +3, FLD_SRC, 2),
+       bus_rel_fld($trap_save_priv, +4, FLD_SRC, 2),
        bus_(HYPER, MSTATUS_BYTE1_MPP_MASK << 8 | HYPER_BIC),
        1);
-  Emit(ctx, bus_rel_fld($trap_save_priv, +3, FLD_SRC, 1), bus(&RV->PRIV), 1);
+  Emit(ctx, bus_rel_fld($trap_save_priv, +3, FLD_SRC,2), bus(&RV->PRIV), 1);
+  Emit(ctx, bus_rel_fld($trap_save_priv, +4, FLD_SRC, 1), bus_(HYPER,3<<8|HYPER_SLL), 1);
   Emit(ctx, bus_(&RV->MSTATUS, 1), bus_(HYPER, HYPER_OR), 1);
   Emit(ctx, bus(&RV->PRIV), Const32(RV_PRIV_M), 4);
 
@@ -495,8 +496,11 @@ riscv_build_emulator(emit_ctx *ctx)
     // 20 | 10:1 | 11 | 19:12
     // 20 gets replicated all the way down to 19, 11 gets moved down, and 10:1 get moved down
     // Write out HYPER | ((0xff_ff_f0_00 & jal) >> 12) << 4
-    Emit(ctx, bus_rel_fld($jal_wb, +1, FLD_SRC, 1), bus_(&RV_Decoder.inst, 1), 2);
-    And(ctx, 1, bus_rel_fld($jal_wb, +1, FLD_SRC, 0), bus_(&RV_Decoder.inst, 0), Const8(0xf0));
+    Emit(ctx, bus_rel_fld($jal_wb, +1, FLD_SRC, 1), bus_(&RV_Decoder.inst, 2), 2);
+    busad $3 = Label(ctx);
+    Emit(ctx, bus_rel_fld($3,+1,FLD_SRC,2), bus_(&RV_Decoder.inst, 1), 1);
+    Emit(ctx, bus_rel_fld($jal_wb, +1, FLD_SRC, 0), bus_(HYPER, 0xf0|HYPER_AND), 1);
+    // And(ctx, 1, bus_rel_fld($jal_wb, +1, FLD_SRC, 0), bus_(&RV_Decoder.inst, 0), Const8(0xf0));
     Branch(ctx, $jal_wb);
   }
 
@@ -538,7 +542,7 @@ riscv_build_emulator(emit_ctx *ctx)
     Emit(ctx, bus_rel_fld($3, +1, FLD_SRC, 1), bus_(&RV_Decoder.inst, 2), 2);
     Emit(ctx, bus(tmp), bus_(HYPER, HYPERV_OP_IMM12_SEXTW), 4);
     Emit(ctx, bus_rel_fld($3, +3, FLD_SRC, 2), bus(tmp), 1);
-    Emit(ctx, bus(tmp), bus_(HYPER, 0xfe << 8 | HYPER_OR), 1);
+    Emit(ctx, bus(tmp), bus_(HYPER, 0xfe << 8 | HYPER_AND), 1);
     Add(ctx, 4, bus(&RV->PC), bus(tmp), bus(rs1));
     Branch(ctx, $jalr_wb);
   }
@@ -839,9 +843,9 @@ riscv_build_emulator(emit_ctx *ctx)
       busad $2 = Label(ctx);
       Emit(ctx, bus_rel_fld($2, +1, FLD_SRC, 1), bus_(&RV_Decoder.inst, 2), 2);
       Emit(ctx, bus_rel_fld($2, +2, FLD_SRC, 2), bus_(HYPER, HYPERV_OP_C_FUNCT7), 1);
-      _funct3_loader->dst_addr = bus_rel_fld($2, +3, FLD_SRC, 1);
-      Emit(ctx, bus_rel_fld($2, +3, FLD_SRC, 0), bus_(HYPER, HYPER_OR), 1);
-      Emit(ctx, bus_rel_fld($2, +4, FLD_SRC, 2), bus_(HYPER, (2 << 8) | HYPER_SLL8B), 1);
+      _funct3_loader->dst_addr = bus_rel_fld($2, +2, FLD_SRC, 1);
+      Emit(ctx, bus_rel_fld($2, +3, FLD_SRC, 2), bus_(HYPER, HYPER_OR), 1);
+      Emit(ctx, bus_rel_fld($2, +4, FLD_SRC, 0), bus_(HYPER, (2 << 8) | HYPER_SLL8B), 1);
       cblk *_dispatch_loader = Emit(ctx, bus_null(), bus(dispatch_reg_ar), 4);  // $2+5
       Emit(ctx, bus_rel_fld($2, +7, FLD_SRC, 1), bus_(&RV_Decoder.inst, 2), 2); // $2+6
       cblk *_rs2_loader = Emit(ctx, bus_null(), bus_(HYPER, HYPERV_OP_C_RS2_X4), 1);
@@ -1257,7 +1261,7 @@ riscv_build_emulator(emit_ctx *ctx)
       // --- --- TRIE LEVEL 1 (MASK 0xff_00_00)
 
       trie1 = arena_alloc(&ARENA, 256, 256);
-      trie1_map = arena_alloc(&ARENA, 20, 20);
+      trie1_map = arena_alloc(&ARENA, 20, 32);
       uint8_t trie1_map_antimodulus = 0xff & (uintptr_t)trie1_map;
       memset(trie1, trie1_map_antimodulus + 0x00, 256);
       trie1[0x10] = trie1_map_antimodulus + 0x04;
@@ -1282,12 +1286,12 @@ riscv_build_emulator(emit_ctx *ctx)
       trie2[0x0'40] = 0x08; // mtimecmp page
       trie2[0x0'bf] = 0x04; // mtime page
       for (int i = 0; i < 16; i++)
-        trie2[0x1'00 + i] = 0xc + (i + 1) * 0x04; // prio page 0
-      trie2[0x1'10] = 0x50;                       // pending
-      trie2[0x1'20] = 0x54;                       // enable
-      trie2[0x2'00] = 0x58;                       // threshold and claim 0
-      trie2[0x3'00] = 0x5c;                       // pl011 registers
-      trie2[0x3'0f] = 0x60;                       // pl011 ID registers
+        trie2[0x1'00 + i] = 0xc + (i) * 0x04; // prio page 0
+      trie2[0x1'10] = 0x4c;                       // pending
+      trie2[0x1'20] = 0x50;                       // enable
+      trie2[0x2'00] = 0x54;                       // threshold and claim 0
+      trie2[0x3'00] = 0x58;                       // pl011 registers
+      trie2[0x3'0f] = 0x5c;                       // pl011 ID registers
 
       // --- --- TRIE LEVEL 3 (MASK 0x00_00_ff)
 
@@ -1504,7 +1508,7 @@ riscv_build_emulator(emit_ctx *ctx)
         $lw_mmio = Label(ctx);
 
         // check if lw_addr is multiple of 4. if not, branch to $badmmio
-        Emit(ctx, bus_rel_fld($lw_mmio, +1, FLD_SRC, 1), bus_(lw_addr, 3), 1);
+        Emit(ctx, bus_rel_fld($lw_mmio, +1, FLD_SRC, 1), bus_(lw_addr, 0), 1);
         Emit(ctx, bus_rel_fld($lw_mmio, +2, FLD_SRC, 0), bus_(SUPER, SUPER_4DIV_X4), 1);
         Emit(ctx, bus_rel_fld($lw_mmio, +3, FLD_NXT, 0), bus(lw_mmio_branch_good), 4);
         MARK(MARK_LOAD + 80);
@@ -1558,7 +1562,7 @@ riscv_build_emulator(emit_ctx *ctx)
                     30,
                     0);
     Emit(ctx, bus_rel_fld($A, +3, FLD_SRC, 0), bus_(HYPER, HYPERV_OP_A_FUNCT3_X4), 1);
-    Emit(ctx, bus_rel_fld($A, +4, FLD_SRC, 0), bus_(HYPER, HYPERV_OP_A_RD), 1);
+    Emit(ctx, bus_rel_fld($A, +4, FLD_SRC, 1), bus_(HYPER, HYPERV_OP_A_RD), 1);
     Emit(ctx, bus_rel_fld($A, +9, FLD_NXT, 0), bus(dispatch_load), 4);
     EmitStridedWith(ctx,
                     TI_DST_INC | TI_2DMODE,
@@ -1627,6 +1631,7 @@ riscv_build_emulator(emit_ctx *ctx)
       busad $ecall_set_cause = Label(ctx);
       Emit(ctx, bus_rel_fld($ecall_set_cause, +1, FLD_SRC, 2), bus(&RV->PRIV), 1);
       Emit(ctx, bus(&RV->MCAUSE), bus_(HYPER, 8 << 8 | HYPER_OR), 1);
+      Emit(ctx, bus_(&RV->MCAUSE,1), bus(ZERO), 3);
       Emit(ctx, bus(&RV->MTVAL), bus(ZERO), 4);
       Emit(ctx, bus(&RV->PC), bus(&RV->MTVEC), 4);
 
@@ -1654,16 +1659,17 @@ riscv_build_emulator(emit_ctx *ctx)
       //
       busad $mret_0 = Label(ctx);
       EmitStrided(ctx, bus_rel_fld($mret_0,+1,FLD_SRC,2), bus_(&RV->MSTATUS,0), 2, 1, 31, 0);
-      Emit(ctx, bus_rel_fld($mret_0,+3,FLD_SRC,1), bus_(HYPER,0x88<<8|HYPER_BIC), 1);
+      // Emit(ctx, bus_rel_fld($mret_0,+3,FLD_SRC,1), bus_(HYPER,0x88<<8|HYPER_BIC), 1);
+      // SUPERV_HandleMPIEOnMRET already handles the 0x88 mask
+      Emit(ctx, bus_(&RV->MSTATUS,0), bus_(SUPER, SUPERV_HandleMPIEOnMRET), 1);
       Emit(ctx, bus_(&RV->MSTATUS,1), bus_(HYPER,0x18<<8|HYPER_BIC), 1);
 
       // MIE is 1<<3, MPIE is 1<<7.
-      Emit(ctx, bus_(&RV->MSTATUS,0), bus_(SUPER, SUPERV_HandleMPIEOnMRET), 1);
       
       Emit(ctx, bus(&RV->PC), bus(&RV->MEPC), 4);
 
       // okay, done
-      Branch(ctx, $all_ret_pcnext);
+      Branch(ctx, $all_ret_direct);
     }
 
     // --- INSN: wfi
@@ -1753,8 +1759,9 @@ riscv_build_emulator(emit_ctx *ctx)
     Branch(ctx, $csr_store);
 
     busad $csri_store = Label(ctx);
-    Emit(ctx, bus_rel_fld($csr_store, +1, FLD_DST, 0), bus(csr_dst), 4);
+    Emit(ctx, bus_rel_fld($csri_store, +1, FLD_DST, 0), bus(csr_dst), 4);
     Emit(ctx, bus_null(), bus(zimm), 4);
+    Branch(ctx, $csr_wb);
 
     busad $csrrwi = Label(ctx);
     Emit(ctx, bus_rel_fld($csrrwi, +1, FLD_SRC, 0), bus(csr_src), 4);
@@ -1798,7 +1805,7 @@ riscv_build_emulator(emit_ctx *ctx)
                     30,
                     0);
     Emit(ctx, bus_rel_fld($env_dispatch, +0, FLD_SRC, 0), bus_(HYPER, HYPERV_OP_A_FUNCT3_X4), 1);
-    Emit(ctx, bus_rel_fld($A, +3, FLD_SRC, 0), bus_(HYPER, HYPERV_OP_A_RD), 1);
+    Emit(ctx, bus_rel_fld($A, +3, FLD_SRC, 1), bus_(HYPER, HYPERV_OP_A_RD), 1);
     Emit(ctx, bus_rel_fld($csr_wb, +0, FLD_DST, 0), bus_(SUPER, SUPERV_RegisterMapWrite), 1);
 
     // <rs1>, <zimm>
@@ -1876,7 +1883,7 @@ riscv_build_emulator(emit_ctx *ctx)
     busad $A = Label(ctx);
     EmitStridedWith(ctx, TI_DST_INC|TI_2DMODE, bus_rel_fld($A,+1,FLD_SRC,1), bus_(&RV_Decoder.inst, 0), 2, 2, 30, 0);
     Emit(ctx, bus_rel_fld($bulkmem_dispatch,+0,FLD_SRC,0), bus_(HYPER,HYPERV_OP_A_FUNCT3_X4), 1);
-    Emit(ctx, bus_rel_fld($A,+3,FLD_SRC,0), bus_(HYPER, HYPERV_OP_A_RD), 1);
+    Emit(ctx, bus_rel_fld($A,+3,FLD_SRC,0), bus_(HYPER, HYPERV_OP_A_RD_X4), 1);
     Emit(ctx, bus(bulk_dst), bus(RV->REGS), 4);
 
     busad $B = Label(ctx);
@@ -1909,7 +1916,7 @@ riscv_build_emulator(emit_ctx *ctx)
   dispatch_op7_hi5[0b11100] = $alu_env._0;
   dispatch_op7_hi5[0b01011] = $alu_atomic._0;
 
-  dispatch_op7_hi5[0b00010] = $emu_custom_0._0;
+  // dispatch_op7_hi5[0b00010] = $emu_custom_0._0;
   dispatch_op7_hi5[0b01010] = $alu_custom_bulkmem._0;
   // dispatch_op7_hi5[0b10110] = $emu_custom_2._0;
   // dispatch_op7_hi5[0b11110] = $emu_custom_3._0;

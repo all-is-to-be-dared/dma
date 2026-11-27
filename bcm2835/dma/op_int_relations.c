@@ -12,7 +12,7 @@ _TableSymbol static volatile alignas(256) uint8_t ANTIPOLAR_TRUTH_X4[256];
     POLAR_TRUTH_X1[hyper + 1] = b1;         \
     ANTIPOLAR_TRUTH_X1[hyper + 0] = b1;     \
     ANTIPOLAR_TRUTH_X1[hyper + 1] = b0;     \
-    POLAR_TRUTH_X4[hyper + 0] = b0;         \
+    POLAR_TRUTH_X4[hyper + 0] = 4 * b0;         \
     POLAR_TRUTH_X4[hyper + 1] = 4 * b1;     \
     ANTIPOLAR_TRUTH_X4[hyper + 0] = 4 * b1; \
     ANTIPOLAR_TRUTH_X4[hyper + 1] = 4 * b0; \

@@ -56,6 +56,7 @@ enum {
   SUPER_SGNB4 = 0x09, // 1
   SUPER_SGNB8 = 0x0a, // 1
   SUPER_SEXTB = 0x0b, // 1
+  // gives 4 if x | 4, 0 otherwise
   SUPER_4DIV_X4 = 0x0c, // 1
 
   // 80 onwards are taken for RV

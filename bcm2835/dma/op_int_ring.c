@@ -9,7 +9,7 @@
 INITIALIZER(4div)
 {
   for(uint16_t i = 0;i < 256;i++)
-    SUPER[i<<8|SUPER_4DIV_X4] = (i % 4) == 0 ? 0 : 4;
+    SUPER[i<<8|SUPER_4DIV_X4] = (i % 4) == 0 ? 4 : 0;
 }
 
 

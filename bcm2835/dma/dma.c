@@ -21,7 +21,7 @@ __dma_timed_run(hw_dmachan_t* chan, cblk* init_blk)
   dsb();
 
   // clear the error bits
-  chan->debug &= ~(DMA_DEBUG_ERROR_READ | DMA_DEBUG_ERROR_READ | DMA_DEBUG_ERROR_AXI_READ_LAST);
+  chan->debug |= (DMA_DEBUG_ERROR_READ | DMA_DEBUG_ERROR_READ | DMA_DEBUG_ERROR_AXI_READ_LAST);
 
   // Sanity check
   assert(!__dma_is_error(chan));

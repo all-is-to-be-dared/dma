@@ -345,18 +345,26 @@ ClearProbes(void);
   ({                                                                   \
     __typeof__((_Expr)) t;                                             \
     auto v = (_Value);                                                 \
-    auto ctx = _mono_get_or_init_ctx(__COUNTER__, sizeof t, sizeof v); \
-    if (!_mono_get(ctx, &v, &t)) {                                     \
+    static struct mono_ctx ctx; \
+    _mono_get_or_init_ctx(&ctx, sizeof t, sizeof v); \
+    if (!_mono_get(&ctx, &v, &t)) {                                     \
       t = (_Expr);                                                     \
-      _mono_set(ctx, &v, &t);                                          \
+      _mono_set(&ctx, &v, &t);                                          \
     }                                                                  \
     t;                                                                 \
   })
 
-struct mono_ctx;
+struct mono_ctx
+{
+  bool inited;
+  size_t keysz;
+  size_t valsz;
+  struct mono* monos;
+};
 
-struct mono_ctx *
-_mono_get_or_init_ctx(long i, size_t ks, size_t vs);
+
+void
+_mono_get_or_init_ctx(struct mono_ctx *c, size_t ks, size_t vs);
 
 bool
 _mono_get(struct mono_ctx *, void *value, void *data);

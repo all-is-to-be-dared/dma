@@ -172,7 +172,7 @@ main(void)
     printf("\tTiming 4-wide " #_Name_ " x%d\n", REPETITION);                                \
     uint64_t times[TIMING_COUNT] = {};                                                      \
     for (int i = 0; i < TIMING_COUNT; i++) {                                                \
-      a = VALUES[i];                                                                        \
+      a = VALUES[0];                                                                        \
       b = 0;                                                                                \
       runinfo = dmakit_timed_run(rsv, start);                                               \
       times[i] = dma_run_info_get_time_ns(runinfo) - overhead;                              \
@@ -222,8 +222,8 @@ main(void)
     printf("\tTiming 4-wide " #_Name_ " x%d\n", REPETITION);                                    \
     uint64_t times[TIMING_COUNT] = {};                                                          \
     for (int i = 0; i < TIMING_COUNT; i++) {                                                    \
-      a = VALUES[0][0];                                                                         \
-      b = VALUES[0][1];                                                                         \
+      a = VALUES[i][0];                                                                         \
+      b = VALUES[i][1];                                                                         \
       c = 0;                                                                                    \
       runinfo = dmakit_timed_run(rsv, start);                                                   \
       times[i] = dma_run_info_get_time_ns(runinfo) - overhead;                                  \
