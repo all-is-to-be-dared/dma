@@ -843,9 +843,9 @@ riscv_build_emulator(emit_ctx *ctx)
       busad $2 = Label(ctx);
       Emit(ctx, bus_rel_fld($2, +1, FLD_SRC, 1), bus_(&RV_Decoder.inst, 2), 2);
       Emit(ctx, bus_rel_fld($2, +2, FLD_SRC, 2), bus_(HYPER, HYPERV_OP_C_FUNCT7), 1);
-      _funct3_loader->dst_addr = bus_rel_fld($2, +2, FLD_SRC, 1);
-      Emit(ctx, bus_rel_fld($2, +3, FLD_SRC, 2), bus_(HYPER, HYPER_OR), 1);
-      Emit(ctx, bus_rel_fld($2, +4, FLD_SRC, 0), bus_(HYPER, (2 << 8) | HYPER_SLL8B), 1);
+      Emit(ctx, bus_rel_fld($2, +3, FLD_SRC, 2), bus_(HYPER, (2 << 8) | HYPER_SLL8B), 1);
+      _funct3_loader->dst_addr = bus_rel_fld($2, +3, FLD_SRC, 1);
+      Emit(ctx, bus_rel_fld($2, +4, FLD_SRC, 0), bus_(HYPER, HYPER_OR), 1);
       cblk *_dispatch_loader = Emit(ctx, bus_null(), bus(dispatch_reg_ar), 4);  // $2+5
       Emit(ctx, bus_rel_fld($2, +7, FLD_SRC, 1), bus_(&RV_Decoder.inst, 2), 2); // $2+6
       cblk *_rs2_loader = Emit(ctx, bus_null(), bus_(HYPER, HYPERV_OP_C_RS2_X4), 1);
@@ -1276,7 +1276,7 @@ riscv_build_emulator(emit_ctx *ctx)
         trie2_len = 4 * 256,
       };
       trie2 = arena_alloc(&ARENA, trie2_len, 256);
-      trie2_map = arena_alloc(&ARENA, 0x68, 256);
+      trie2_map = arena_alloc(&ARENA, 0x60, 256);
 
       trie1_map[0] = bus(trie2_badtrie)._0;
       for (int i = 0; i < 4; i++)
