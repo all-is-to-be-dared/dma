@@ -1251,9 +1251,10 @@ riscv_build_emulator(emit_ctx *ctx)
       // This is a radix trie to match on MMIO addresses.
 
       static volatile alignas(256) uint8_t trie2_badtrie[256];
-      volatile uint32_t *trie3_badtrie_map = arena_alloc(&ARENA, 4, 256);
+      volatile uint32_t *trie3_badtrie_map = arena_alloc(&ARENA, 256, 256);
       memset((uint8_t *)trie2_badtrie, 0, 256);
-      trie3_badtrie_map[0] = $load_access_fault._0;
+      for(int i = 0;i<64;i++)
+        trie3_badtrie_map[i] = $load_access_fault._0;
 
       uint8_t *trie1, *trie2;
       uint32_t *trie1_map, *trie2_map;
