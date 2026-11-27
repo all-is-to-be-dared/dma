@@ -333,6 +333,7 @@ Div_32_32(emit_ctx *ctx, busad quot16, busad rem32, busad num32, busad den32)
             bus(&State_32_32.DEN[1]));
 
   uint32_t *MULTIPLIER_PREP = MonomorphizeOn(0, arena_alloc(&ARENA, 4, 4));
+  *MULTIPLIER_PREP = 0;
   Emit(ctx, bus(MULTIPLIER_PREP), bus(&State_32_32.DEN[0]), 2);
   // should be 32x16->32 multiply, but i don't have one of those yet
   UMul(ctx, 4, bus(&State_32_32.C1), bus(&State_32_32.QHAT), bus(MULTIPLIER_PREP));
@@ -501,49 +502,52 @@ SDiv32(emit_ctx *ctx, busad quot, busad rem, busad a32, busad b32)
   struct SDiv32_Tables *tables = MonomorphizeOn(0, arena_alloc(&ARENA, sizeof *tables, 1 << 16));
   memset(tables, 0, sizeof *tables);
 
-  volatile uint32_t *X_A = MonomorphizeOn(0, arena_alloc(&ARENA, sizeof *X_A, 4));
-  volatile uint32_t *X_B = MonomorphizeOn(0, arena_alloc(&ARENA, sizeof *X_B, 4));
-  volatile uint32_t *B_Z = MonomorphizeOn(0, arena_alloc(&ARENA, sizeof *B_Z, 4));
-  volatile uint32_t *A_U = MonomorphizeOn(0, arena_alloc(&ARENA, sizeof *A_U, 4));
-  volatile uint32_t *B_U = MonomorphizeOn(0, arena_alloc(&ARENA, sizeof *B_U, 4));
-  *X_A = *X_B = *B_Z = 0;
+  cblk *_xa_to_sign_table, *_xb_to_sign_table, *_xa_to_rem_sign_table, *_bz_to_qzero_table;
+  {
+    volatile uint32_t *X_A = MonomorphizeOn(0, arena_alloc(&ARENA, sizeof *X_A, 4));
+    volatile uint32_t *X_B = MonomorphizeOn(0, arena_alloc(&ARENA, sizeof *X_B, 4));
+    volatile uint32_t *B_Z = MonomorphizeOn(0, arena_alloc(&ARENA, sizeof *B_Z, 4));
+    volatile uint32_t *A_U = MonomorphizeOn(0, arena_alloc(&ARENA, sizeof *A_U, 4));
+    volatile uint32_t *B_U = MonomorphizeOn(0, arena_alloc(&ARENA, sizeof *B_U, 4));
+    *X_A = *X_B = *B_Z = 0;
 
-  busad $0 = Label(ctx);
-  Emit(ctx, bus_rel_fld($0, +1, FLD_SRC, 1), bus_add(a32, 3), 1);
-  Emit(ctx, bus(&X_A), bus_(SUPER, SUPER_SGNB4), 1);
-  Emit(ctx, bus_rel_fld($0, +3, FLD_SRC, 1), bus_add(b32, 3), 1);
-  Emit(ctx, bus(&X_B), bus_(SUPER, SUPER_SGNB4), 1);
-  Equ(ctx, 4, bus(&B_Z), b32, bus(ZERO), ICF_X4);
+    busad $0 = Label(ctx);
+    Emit(ctx, bus_rel_fld($0, +1, FLD_SRC, 1), bus_add(a32, 3), 1);
+    Emit(ctx, bus(X_A), bus_(SUPER, SUPER_SGNB4), 1);
+    Emit(ctx, bus_rel_fld($0, +3, FLD_SRC, 1), bus_add(b32, 3), 1);
+    Emit(ctx, bus(X_B), bus_(SUPER, SUPER_SGNB4), 1);
+    Equ(ctx, 4, bus(B_Z), b32, bus(ZERO), ICF_X4);
 
-  busad $load_a_abs = Label(ctx);
-  Emit(ctx, bus_rel_fld($load_a_abs, +1, FLD_SRC, 0), bus(&X_A), 1);
-  Emit(ctx, bus_rel_fld($load_a_abs, +2, FLD_NXT, 0), bus(tables->A_ABS), 4);
-  cblk *_xa_to_sign_table = Here(ctx);
-  Emit(ctx, bus(ZERO), bus(&X_A), 1);
+    busad $load_a_abs = Label(ctx);
+    Emit(ctx, bus_rel_fld($load_a_abs, +1, FLD_SRC, 0), bus(X_A), 1);
+    Emit(ctx, bus_rel_fld($load_a_abs, +2, FLD_NXT, 0), bus(tables->A_ABS), 4);
+    _xa_to_sign_table = Here(ctx);
+    Emit(ctx, bus(ZERO), bus(X_A), 1);
 
-  tables->A_ABS[1] = Label(ctx)._0;
-  Neg(ctx, 4, bus(&A_U), a32);
-  Branch(ctx, bus_rel_cb(Label(ctx), +1));
-  tables->A_ABS[0] = Label(ctx)._0;
-  Emit(ctx, bus(&A_U), a32, 4);
+    tables->A_ABS[1] = Label(ctx)._0;
+    Neg(ctx, 4, bus(A_U), a32);
+    Branch(ctx, bus_rel_cb(Label(ctx), +1));
+    tables->A_ABS[0] = Label(ctx)._0;
+    Emit(ctx, bus(A_U), a32, 4);
 
-  busad $load_b_abs = Label(ctx);
-  Emit(ctx, bus_rel_fld($load_b_abs, +1, FLD_SRC, 0), bus(&X_B), 1);
-  Emit(ctx, bus_rel_fld($load_b_abs, +2, FLD_NXT, 0), bus(tables->B_ABS), 4);
-  cblk *_xb_to_sign_table = Here(ctx);
-  Emit(ctx, bus(ZERO), bus(&X_B), 1);
+    busad $load_b_abs = Label(ctx);
+    Emit(ctx, bus_rel_fld($load_b_abs, +1, FLD_SRC, 0), bus(X_B), 1);
+    Emit(ctx, bus_rel_fld($load_b_abs, +2, FLD_NXT, 0), bus(tables->B_ABS), 4);
+    _xb_to_sign_table = Here(ctx);
+    Emit(ctx, bus(ZERO), bus(X_B), 1);
 
-  tables->B_ABS[1] = Label(ctx)._0;
-  Neg(ctx, 4, bus(&B_U), b32);
-  Branch(ctx, bus_rel_cb(Label(ctx), +1));
-  tables->B_ABS[0] = Label(ctx)._0;
-  Emit(ctx, bus(&B_U), b32, 4);
+    tables->B_ABS[1] = Label(ctx)._0;
+    Neg(ctx, 4, bus(B_U), b32);
+    Branch(ctx, bus_rel_cb(Label(ctx), +1));
+    tables->B_ABS[0] = Label(ctx)._0;
+    Emit(ctx, bus(B_U), b32, 4);
 
-  cblk *_xa_to_rem_sign_table = Here(ctx);
-  Emit(ctx, bus(ZERO), bus(&X_A), 1);
-  cblk *_bz_to_qzero_table = Here(ctx);
-  Emit(ctx, bus(ZERO), bus(&B_Z), 1);
-  UDiv32(ctx, quot, rem, bus(&A_U), bus(&B_U));
+    _xa_to_rem_sign_table = Here(ctx);
+    Emit(ctx, bus(ZERO), bus(X_A), 1);
+    _bz_to_qzero_table = Here(ctx);
+    Emit(ctx, bus(ZERO), bus(B_Z), 1);
+    UDiv32(ctx, quot, rem, bus(A_U), bus(B_U));
+  }
 
   busad $qzero_dispatch = Label(ctx);
   // udiv_exits.w0u->next_cb = udiv_exits.wbu->next_cb = udiv_exits.whu->next_cb =

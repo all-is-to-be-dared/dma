@@ -54,8 +54,8 @@ struct mono_ctx
 
 enum
 {
-  MAX_MONO = 512,
-  MAX_CONTEXT = 128,
+  MAX_MONO = 1024,
+  MAX_CONTEXT = 256,
 };
 static struct mono MONOS[MAX_MONO];
 static struct mono_ctx CONTEXTS[MAX_CONTEXT];

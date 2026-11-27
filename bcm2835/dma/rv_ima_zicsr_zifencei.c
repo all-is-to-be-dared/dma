@@ -384,6 +384,9 @@ riscv_build_emulator(emit_ctx *ctx)
     //  1. External interrupts (UART)
     //  2. Internal interrupts (Timer)
     // Fall-through is $emu_ifetch
+
+    // TODO: also CSR write handling?
+    
     Branch(ctx, $emu_ifetch);
   }
 
@@ -572,7 +575,7 @@ riscv_build_emulator(emit_ctx *ctx)
 
     // TODO: could optimize out blo
     Or(ctx, 2, bus(bhi), bus(bhi), bus(blo));
-    Add(ctx, 4, bus(&RV->PC), bus(&RV->PC), bus(&bhi));
+    Add(ctx, 4, bus(&RV->PC), bus(&RV->PC), bus(bhi));
     Branch(ctx, $all_ret_direct);
 
     // 3. Taken/Not taken switch
@@ -673,25 +676,25 @@ riscv_build_emulator(emit_ctx *ctx)
     Add(ctx, 4, bus(out), bus(rs1), bus(rs2));
     Branch(ctx, $arith_wb);
     busad $sub = Label(ctx);
-    Sub(ctx, 4, bus(&out), bus(rs1), bus(rs2));
+    Sub(ctx, 4, bus(out), bus(rs1), bus(rs2));
     Branch(ctx, $arith_wb);
     busad $xor = Label(ctx);
-    Xor(ctx, 4, bus(&out), bus(rs1), bus(rs2));
+    Xor(ctx, 4, bus(out), bus(rs1), bus(rs2));
     Branch(ctx, $arith_wb);
     busad $or = Label(ctx);
-    Or(ctx, 4, bus(&out), bus(rs1), bus(rs2));
+    Or(ctx, 4, bus(out), bus(rs1), bus(rs2));
     Branch(ctx, $arith_wb);
     busad $and = Label(ctx);
-    And(ctx, 4, bus(&out), bus(rs1), bus(rs2));
+    And(ctx, 4, bus(out), bus(rs1), bus(rs2));
     Branch(ctx, $arith_wb);
     busad $sll = Label(ctx);
-    Sll(ctx, 4, bus(&out), bus(rs1), bus(rs2));
+    Sll(ctx, 4, bus(out), bus(rs1), bus(rs2));
     Branch(ctx, $arith_wb);
     busad $srl = Label(ctx);
-    Srl(ctx, 4, bus(&out), bus(rs1), bus(rs2));
+    Srl(ctx, 4, bus(out), bus(rs1), bus(rs2));
     Branch(ctx, $arith_wb);
     busad $sra = Label(ctx);
-    Sra(ctx, 4, bus(&out), bus(rs1), bus(rs2));
+    Sra(ctx, 4, bus(out), bus(rs1), bus(rs2));
     Branch(ctx, $arith_wb);
     busad $slt = Label(ctx);
     Lts(ctx, 4, bus(out), bus(rs1), bus(rs2), 0);
@@ -732,7 +735,7 @@ riscv_build_emulator(emit_ctx *ctx)
       Branch(ctx, $arith_wb);
       sign_switch[3] = Label(ctx)._0; // rs2<0 && rs1<0
       Sub(ctx, 4, bus(out), bus_(mul_wide, 4), bus(rs2));
-      Sub(ctx, 4, bus(out), bus(out), bus(rs2));
+      Sub(ctx, 4, bus(out), bus(out), bus(rs1));
       Branch(ctx, $arith_wb);
     }
 
@@ -873,7 +876,7 @@ riscv_build_emulator(emit_ctx *ctx)
     srxi_jump[2] = $illegal._0;
     volatile uint32_t *slli_jump = arena_alloc(&ARENA, 12, 256);
     slli_jump[0] = $illegal._0; // no slai
-    slli_jump[1] = $srl._0;
+    slli_jump[1] = $sll._0;
     slli_jump[2] = $illegal._0;
 
     busad $srxi = Label(ctx);
@@ -1065,7 +1068,7 @@ riscv_build_emulator(emit_ctx *ctx)
       Emit(ctx, bus_rel_fld($0, +2, FLD_SRC, 0), bus(rs1), 4);
       Emit(ctx, bus_rel_fld($amominmaxw_ld, +0, FLD_DST, 0), bus(rs1), 4);
       Emit(ctx, bus(rs1), bus_null(), 4);
-      Emit(ctx, bus(&out), bus(rs1), 4);
+      Emit(ctx, bus(out), bus(rs1), 4);
       Lts(ctx, 4, bus_rel_fld($amominmaxw_ld, +0, FLD_SRC, 0), bus(rs1), bus(rs2), ICF_X4);
       Branch(ctx, $amominmaxw_ld);
     }
@@ -1077,7 +1080,7 @@ riscv_build_emulator(emit_ctx *ctx)
       Emit(ctx, bus_rel_fld($0, +2, FLD_SRC, 0), bus(rs1), 4);
       Emit(ctx, bus_rel_fld($amominmaxw_ld, +0, FLD_DST, 0), bus(rs1), 4);
       Emit(ctx, bus(rs1), bus_null(), 4);
-      Emit(ctx, bus(&out), bus(rs1), 4);
+      Emit(ctx, bus(out), bus(rs1), 4);
       Ges(ctx, 4, bus_rel_fld($amominmaxw_ld, +0, FLD_SRC, 0), bus(rs1), bus(rs2), ICF_X4);
       Branch(ctx, $amominmaxw_ld);
     }
@@ -1089,7 +1092,7 @@ riscv_build_emulator(emit_ctx *ctx)
       Emit(ctx, bus_rel_fld($0, +2, FLD_SRC, 0), bus(rs1), 4);
       Emit(ctx, bus_rel_fld($amominmaxw_ld, +0, FLD_DST, 0), bus(rs1), 4);
       Emit(ctx, bus(rs1), bus_null(), 4);
-      Emit(ctx, bus(&out), bus(rs1), 4);
+      Emit(ctx, bus(out), bus(rs1), 4);
       Ltu(ctx, 4, bus_rel_fld($amominmaxw_ld, +0, FLD_SRC, 0), bus(rs1), bus(rs2), ICF_X4);
       Branch(ctx, $amominmaxw_ld);
     }
@@ -1101,10 +1104,13 @@ riscv_build_emulator(emit_ctx *ctx)
       Emit(ctx, bus_rel_fld($0, +2, FLD_SRC, 0), bus(rs1), 4);
       Emit(ctx, bus_rel_fld($amominmaxw_ld, +0, FLD_DST, 0), bus(rs1), 4);
       Emit(ctx, bus(rs1), bus_null(), 4);
-      Emit(ctx, bus(&out), bus(rs1), 4);
+      Emit(ctx, bus(out), bus(rs1), 4);
       Geu(ctx, 4, bus_rel_fld($amominmaxw_ld, +0, FLD_SRC, 0), bus(rs1), bus(rs2), ICF_X4);
       Branch(ctx, $amominmaxw_ld);
     }
+
+    for(int i = 0;i<64;i++)
+      dispatch_amo[i] = $illegal._0;
 
     dispatch_amo[0x00] = $amoaddw._0;
     dispatch_amo[0x01] = $amoswapw._0;

@@ -140,10 +140,12 @@ Srl(emit_ctx* c, size_t width, busad ret, busad inp, busad shf8)
                             t;
                           }));
   tmp = MonomorphizeOn(width, ({ arena_alloc(&ARENA, 2 * width, 256); }));
+  memset(tmp, 0, 2 * width);
 
 
   // TODO: can I drop this line?
-  Emit(c, bus(tmp), bus(ZERO), width);
+  // note: upper bytes are zeroed by the memset above, so only need to zero the lower half
+  // Emit(c, bus(tmp), bus(ZERO), width);
   Srl8(c, width, bus_(tmp, 0), inp, shf8);
 
   $0 = Label(c);
