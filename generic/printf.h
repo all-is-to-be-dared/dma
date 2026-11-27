@@ -2,6 +2,10 @@
 
 #include "printf/printf.h" // IWYU pragma: export
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #if __ARM_ARCH == 6
 #include "../bcm2835/platform.h"
 #endif
@@ -25,8 +29,12 @@ static inline int printf(const char *s, ...)
   va_list args;
   int r;
   
-  va_start(args);
+  va_start(args, s);
   r = vprintf(s, args);
   va_end(args);
   return r;
 }
+
+#ifdef __cplusplus
+}
+#endif

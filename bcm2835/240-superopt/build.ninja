@@ -6,7 +6,7 @@ c = bcm2835/240-superopt/
 # --------------------------------------------------------------------------------------------------
 # COMMON SOURCES
 
-build $c/ppa.o: arm_cc $c/ppa.c
+build $c/ppa.o: bcm2835_cc $c/ppa.c
 
 
 
@@ -14,11 +14,11 @@ build $c/ppa.o: arm_cc $c/ppa.c
 # --------------------------------------------------------------------------------------------------
 # TARGET 1-test-ppa
 
-build $c/1-test-ppa.elf.xz: arm_xz $c/1-test-ppa.elf
-build $c/1-test-ppa.elf: arm_link $c/1-test-ppa.o $c/ppa.o bcm2835/libplatform.a bcm2835/libc.a $
+build $c/1-test-ppa.elf.xz: bcm2835_xz $c/1-test-ppa.elf
+build $c/1-test-ppa.elf: bcm2835_link $c/1-test-ppa.o $c/ppa.o bcm2835/libplatform.a bcm2835/libc.a $
     | bcm2835/common.ld
   ldflags_ext = -Tbcm2835/common.ld
   libs = bcm2835/libgcc.a
-build $c/1-test-ppa.o: arm_cc $c/1-test-ppa.c
+build $c/1-test-ppa.o: bcm2835_cc $c/1-test-ppa.c
 
 default $c/1-test-ppa.elf.xz

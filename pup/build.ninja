@@ -14,11 +14,11 @@ subninja pup/xz-embedded/build.ninja
 
 builddir = build/bcm2835/pup/
 
-build pup/bcm2835.bin.xz: arm_xz pup/bcm2835.bin
-build pup/bcm2835.bin: arm_objcopy pup/bcm2835.elf
-build pup/bcm2835.elf.xz: arm_xz pup/bcm2835.elf
+build pup/bcm2835.bin.xz: bcm2835_xz pup/bcm2835.bin
+build pup/bcm2835.bin: bcm2835_objcopy pup/bcm2835.elf
+build pup/bcm2835.elf.xz: bcm2835_xz pup/bcm2835.elf
 
-build pup/bcm2835.elf: arm_link $
+build pup/bcm2835.elf: bcm2835_link $
   ${builddir}/fsm.o ${builddir}/crc.o ${builddir}/fcs.o $
   ${builddir}/bcm2835.o ${builddir}/bin.o ${builddir}/elf.o $
   ${builddir}/elf_loader.o ${builddir}/libxz_embedded.a $
@@ -27,17 +27,17 @@ build pup/bcm2835.elf: arm_link $
   ldflags_ext = -Tpup/bcm2835.ld
   libs = bcm2835/libgcc.a 
 
-build ${builddir}/bcm2835.o: arm_cc pup/bcm2835.c
-build ${builddir}/elf_loader.o: arm_cc pup/elf_loader.c
+build ${builddir}/bcm2835.o: bcm2835_cc pup/bcm2835.c
+build ${builddir}/elf_loader.o: bcm2835_cc pup/elf_loader.c
 
-build ${builddir}/bin.o: arm_cc pup/trampolines/bin.bcm2835.S
-build ${builddir}/elf.o: arm_cc pup/trampolines/elf.bcm2835.S
+build ${builddir}/bin.o: bcm2835_cc pup/trampolines/bin.bcm2835.S
+build ${builddir}/elf.o: bcm2835_cc pup/trampolines/elf.bcm2835.S
   cflags_ext = -I. -Inewlib-cygwin/include -Inewlib-cygwin/newlib/libc/string
 
-build ${builddir}/fsm.o: arm_cc pup/fsm.c
+build ${builddir}/fsm.o: bcm2835_cc pup/fsm.c
   cflags_ext = -DNO_UPLOAD=1
-build ${builddir}/crc.o: arm_cc pup/crc.c
-build ${builddir}/fcs.o: arm_cc pup/fcs.c
+build ${builddir}/crc.o: bcm2835_cc pup/crc.c
+build ${builddir}/fcs.o: bcm2835_cc pup/fcs.c
 
 default pup/bcm2835.elf pup/bcm2835.elf.xz pup/bcm2835.bin pup/bcm2835.bin.xz
 

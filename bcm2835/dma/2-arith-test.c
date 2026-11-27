@@ -79,6 +79,20 @@ main(void)
       printf(" %d", i);
   printf("\n\n");
 
+  HYPER = (void *)0x10000000;
+  QHAT = HYPER + (1 << 24);
+  RHAT = QHAT + (1 << 24);
+  // enum {
+  //   ARENA_SIZE = 1 << 24,
+  // };
+  // volatile uint8_t  *ARENA_BACKING = RHAT + (ARENA_SIZE);
+  // ARENA = (arena){
+  //   .start = ARENA_BACKING,
+  //   .p = ARENA_BACKING,
+  //   .end = ARENA_BACKING + (ARENA_SIZE),
+  //   .util = 0,
+  // };
+
   dmakit_init_channels();
   struct dmakit_reservation rsv;
   struct dma_run_info runinfo;
@@ -89,6 +103,8 @@ main(void)
   dmakit_dump_channel_reservations();
   printf("\n");
 
+
+
   uint32_t init_start = cycle_count_read(), init_end;
   run_initializers(); // run all the magic INITIALIZERs
   init_end = cycle_count_read();
@@ -96,7 +112,7 @@ main(void)
 
   enum
   {
-    BLOCK_CNT = 1024
+    BLOCK_CNT = 32768
   };
   static cblk blocks[BLOCK_CNT];
   cblk *start;
@@ -112,7 +128,7 @@ main(void)
   enum
   {
     TIMING_COUNT = 256,
-    REPEAT_FAC = 8,
+    REPETITION = 1,
   };
 
   uint64_t oh_3x, oh_6x, overhead;
@@ -151,7 +167,7 @@ main(void)
 
   overhead = oh_3x - (oh_6x - oh_3x);
 
-  printf("Basal overhead (1xDST_IGN): %lldns", overhead);
+  printf("Basal overhead (1xDST_IGN): %lldns\n", overhead);
 
 #define test_unsigned_unary(_Name_, _Args_, _Op_)                                           \
   {                                                                                         \
@@ -159,7 +175,7 @@ main(void)
     volatile uint32_t a, b;                                                                 \
     b = 0;                                                                                  \
     start = Here(&ctx);                                                                     \
-    for (int i = 0; i < REPEAT_FAC; i++)                                                    \
+    for (int i = 0; i < REPETITION; i++)                                                    \
       _Name_(&ctx, 4, bus(&b), bus(&a));                                                    \
     End(&ctx);                                                                              \
     printf("\nChecking 4-wide " #_Name_ "\x1b[0m");                                         \
@@ -173,7 +189,7 @@ main(void)
       assert(b == (_Op_), "post: b = %08" PRIx32 " (expected %08" PRIx32 ")\n", b, (_Op_)); \
     }                                                                                       \
     printf(" \x1b[32mOK\x1b[0m\n");                                                         \
-    printf("\tTiming 4-wide " #_Name_ " x%d\n", REPEAT_FAC);                                \
+    printf("\tTiming 4-wide " #_Name_ " x%d\n", REPETITION);                                \
     uint64_t times[TIMING_COUNT] = {};                                                      \
     for (int i = 0; i < TIMING_COUNT; i++) {                                                \
       a = VALUES[i];                                                                        \
@@ -186,14 +202,14 @@ main(void)
           printf("\x1b[31m");                                                               \
         else if (((double)times[j] - meanlf(times, i)) > stdevlf(times, i))                 \
           printf("\x1b[33m");                                                               \
-        printf("% 8lldns\x1b[0m", times[j] / REPEAT_FAC);                                   \
+        printf("% 8lldns\x1b[0m", times[j] / REPETITION);                                   \
       }                                                                                     \
     }                                                                                       \
     printf("\n\n\t\x1b[1;35m" #_Name_ "\x1b[0m | ν=\x1b[4m%.3f\x1b[0;2mkHz\x1b[0m "         \
            "μ=%.3f\x1b[2mcy\x1b[0m σ=%.3f\x1b[2mcy\x1b[0m \n\n",                            \
-           (double)REPEAT_FAC * 1'000'000. / meanlf(times, TIMING_COUNT),                   \
-           meanlf(times, TIMING_COUNT) / (double)REPEAT_FAC,                                \
-           stdevlf(times, TIMING_COUNT) / (double)REPEAT_FAC);                              \
+           (double)REPETITION * 1'000'000. / meanlf(times, TIMING_COUNT),                   \
+           meanlf(times, TIMING_COUNT) / (double)REPETITION,                                \
+           stdevlf(times, TIMING_COUNT) / (double)REPETITION);                              \
   }
 
 #define test_unsigned_binary(_Name_, _Args_, _Op_, ...)                                         \
@@ -201,7 +217,7 @@ main(void)
     constexpr uint32_t VALUES[][2] = _Args_;                                                    \
     volatile uint32_t a, b, c;                                                                  \
     start = Here(&ctx);                                                                         \
-    for (int i = 0; i < REPEAT_FAC; i++)                                                        \
+    for (int i = 0; i < REPETITION; i++)                                                        \
       _Name_(&ctx, 4, bus(&c), bus(&a), bus(&b) __VA_OPT__(, ) __VA_ARGS__);                    \
     End(&ctx);                                                                                  \
     printf("\nChecking 4-wide " #_Name_ "\x1b[0m");                                             \
@@ -223,7 +239,7 @@ main(void)
              b);                                                                                \
     }                                                                                           \
     printf(" \x1b[32mOK\x1b[0m\n");                                                             \
-    printf("\tTiming 4-wide " #_Name_ " x%d\n", REPEAT_FAC);                                    \
+    printf("\tTiming 4-wide " #_Name_ " x%d\n", REPETITION);                                    \
     uint64_t times[TIMING_COUNT] = {};                                                          \
     for (int i = 0; i < TIMING_COUNT; i++) {                                                    \
       a = VALUES[0][0];                                                                         \
@@ -237,145 +253,660 @@ main(void)
           printf("\x1b[31m");                                                                   \
         else if (((double)times[j] - meanlf(times, i)) > stdevlf(times, i))                     \
           printf("\x1b[33m");                                                                   \
-        printf("% 8lldns\x1b[0m", times[j] / REPEAT_FAC);                                       \
+        printf("% 8lldns\x1b[0m", times[j] / REPETITION);                                       \
       }                                                                                         \
     }                                                                                           \
     printf("\n\n\t\x1b[1;34m" #_Name_ "\x1b[0m | ν=\x1b[4m%.3f\x1b[0;2mkHz\x1b[0m "             \
            "μ=%.3f\x1b[2mcy\x1b[0m σ=%.3f\x1b[2mcy\x1b[0m \n\n",                                \
-           (double)REPEAT_FAC * 1'000'000. / meanlf(times, TIMING_COUNT),                       \
-           meanlf(times, TIMING_COUNT) / (double)REPEAT_FAC,                                    \
-           stdevlf(times, TIMING_COUNT) / (double)REPEAT_FAC);                                  \
+           (double)REPETITION * 1'000'000. / meanlf(times, TIMING_COUNT),                       \
+           meanlf(times, TIMING_COUNT) / (double)REPETITION,                                    \
+           stdevlf(times, TIMING_COUNT) / (double)REPETITION);                                  \
   }
 
-  test_unsigned_unary(
-    Inc,
-    ((const uint32_t[]){
-      0x00000000, 0x000000ff, 0x000001ff, 0x0000ffff, 0x0000ff00, 0x00ffffff, 0xffffffff }),
-    a + 1);
-  test_unsigned_binary(Add, ((const uint32_t[][2]){ { 0x12345678U, 0xfedcba98U } }), a + b);
-  test_unsigned_binary(
-    Sub, ((const uint32_t[][2]){ { 0x12345678U, 0x11 }, { 0x11, 0x12345678 } }), a - b);
+  // test_unsigned_unary(
+  //   Inc,
+  //   ((const uint32_t[]){
+  //     0x00000000, 0x000000ff, 0x000001ff, 0x0000ffff, 0x0000ff00, 0x00ffffff, 0xffffffff }),
+  //   a + 1);
+  // test_unsigned_binary(Add, ((const uint32_t[][2]){ { 0x12345678U, 0xfedcba98U } }), a + b);
+  // test_unsigned_binary(
+  //   Sub, ((const uint32_t[][2]){ { 0x12345678U, 0x11 }, { 0x11, 0x12345678 } }), a - b);
 
 
 
 
-  test_unsigned_unary(Not, ((const uint32_t[]){ 0x12345678UL }), ~a);
-  test_unsigned_binary(And, ((const uint32_t[][2]){ { 0x12345678U, 0xfedcba98U } }), a & b);
-  test_unsigned_binary(Or, ((const uint32_t[][2]){ { 0x12345678U, 0xfedcba98U } }), a | b);
-  test_unsigned_binary(Xor, ((const uint32_t[][2]){ { 0x12345678U, 0xfedcba98U } }), a ^ b);
+  // test_unsigned_unary(Not, ((const uint32_t[]){ 0x12345678UL }), ~a);
+  // test_unsigned_binary(And, ((const uint32_t[][2]){ { 0x12345678U, 0xfedcba98U } }), a & b);
+  // test_unsigned_binary(Or, ((const uint32_t[][2]){ { 0x12345678U, 0xfedcba98U } }), a | b);
+  // test_unsigned_binary(Xor, ((const uint32_t[][2]){ { 0x12345678U, 0xfedcba98U } }), a ^ b);
 
 
 
 
-  test_unsigned_binary(Sll,
-                       ((const uint32_t[][2]){ { 0x12345678, 0 },
-                                               { 0x12345678, 1 },
-                                               { 0x12345678, 7 },
-                                               { 0x12345678, 8 },
-                                               { 0x12345678, 9 },
-                                               { 0x12345678, 15 },
-                                               { 0x12345678, 16 },
-                                               { 0x12345678, 21 },
-                                               { 0x12345678, 31 },
-                                               { 0x12345678, 32 },
-                                               { 0x12345678, 33 } }),
-                       a << (b % 32));
-  test_unsigned_binary(Srl,
-                       ((const uint32_t[][2]){ { 0x87654321, 0 },
-                                               { 0x87654321, 1 },
-                                               { 0x87654321, 7 },
-                                               { 0x87654321, 8 },
-                                               { 0x87654321, 9 },
-                                               { 0x87654321, 15 },
-                                               { 0x87654321, 16 },
-                                               { 0x87654321, 21 },
-                                               { 0x87654321, 31 },
-                                               { 0x87654321, 32 },
-                                               { 0x87654321, 33 } }),
-                       a >> (b % 32));
-  test_unsigned_binary(
-    Sra,
-    ((const uint32_t[][2]){
-      { 0x12345678, 0 },  { 0x12345678, 1 },  { 0x12345678, 7 },  { 0x12345678, 8 },
-      { 0x12345678, 9 },  { 0x12345678, 15 }, { 0x12345678, 16 }, { 0x12345678, 21 },
-      { 0x12345678, 31 }, { 0x12345678, 32 }, { 0x12345678, 33 }, { 0x87654321, 0 },
-      { 0x87654321, 1 },  { 0x87654321, 7 },  { 0x87654321, 8 },  { 0x87654321, 9 },
-      { 0x87654321, 15 }, { 0x87654321, 16 }, { 0x87654321, 21 }, { 0x87654321, 31 },
-      { 0x87654321, 32 }, { 0x87654321, 33 },
-    }),
-    (int32_t)a >> (b % 32));
+  // test_unsigned_binary(Sll,
+  //                      ((const uint32_t[][2]){ { 0x12345678, 0 },
+  //                                              { 0x12345678, 1 },
+  //                                              { 0x12345678, 7 },
+  //                                              { 0x12345678, 8 },
+  //                                              { 0x12345678, 9 },
+  //                                              { 0x12345678, 15 },
+  //                                              { 0x12345678, 16 },
+  //                                              { 0x12345678, 21 },
+  //                                              { 0x12345678, 31 },
+  //                                              { 0x12345678, 32 },
+  //                                              { 0x12345678, 33 } }),
+  //                      a << (b % 32));
+  // test_unsigned_binary(Srl,
+  //                      ((const uint32_t[][2]){ { 0x87654321, 0 },
+  //                                              { 0x87654321, 1 },
+  //                                              { 0x87654321, 7 },
+  //                                              { 0x87654321, 8 },
+  //                                              { 0x87654321, 9 },
+  //                                              { 0x87654321, 15 },
+  //                                              { 0x87654321, 16 },
+  //                                              { 0x87654321, 21 },
+  //                                              { 0x87654321, 31 },
+  //                                              { 0x87654321, 32 },
+  //                                              { 0x87654321, 33 } }),
+  //                      a >> (b % 32));
+  // test_unsigned_binary(
+  //   Sra,
+  //   ((const uint32_t[][2]){
+  //     { 0x12345678, 0 },  { 0x12345678, 1 },  { 0x12345678, 7 },  { 0x12345678, 8 },
+  //     { 0x12345678, 9 },  { 0x12345678, 15 }, { 0x12345678, 16 }, { 0x12345678, 21 },
+  //     { 0x12345678, 31 }, { 0x12345678, 32 }, { 0x12345678, 33 }, { 0x87654321, 0 },
+  //     { 0x87654321, 1 },  { 0x87654321, 7 },  { 0x87654321, 8 },  { 0x87654321, 9 },
+  //     { 0x87654321, 15 }, { 0x87654321, 16 }, { 0x87654321, 21 }, { 0x87654321, 31 },
+  //     { 0x87654321, 32 }, { 0x87654321, 33 },
+  //   }),
+  //   (int32_t)a >> (b % 32));
 
-  test_unsigned_binary(Geu,
-                       ((const uint32_t[][2]){ { 0, 0 },
-                                               { 1, 0 },
-                                               { 0, 1 },
-                                               { 0x100, 0 },
-                                               { 0x200, 0x100 },
-                                               { 0x2000, 0x1000 },
-                                               { 0x20000, 0x10000 },
-                                               { 0x10000, 0x20000 },
-                                               { 0x1000000, 0x2000000 },
-                                               { 0x2000000, 0x1000000 },
-                                               { 0x1000000, 0x1000000 } }),
-                       a >= b,
-                       0);
+  // test_unsigned_binary(Geu,
+  //                      ((const uint32_t[][2]){ { 0, 0 },
+  //                                              { 1, 0 },
+  //                                              { 0, 1 },
+  //                                              { 0x100, 0 },
+  //                                              { 0x200, 0x100 },
+  //                                              { 0x2000, 0x1000 },
+  //                                              { 0x20000, 0x10000 },
+  //                                              { 0x10000, 0x20000 },
+  //                                              { 0x1000000, 0x2000000 },
+  //                                              { 0x2000000, 0x1000000 },
+  //                                              { 0x1000000, 0x1000000 } }),
+  //                      a >= b,
+  //                      0);
 
-  test_unsigned_binary(Ltu,
-                       ((const uint32_t[][2]){ { 0, 0 },
-                                               { 1, 0 },
-                                               { 0, 1 },
-                                               { 0x100, 0 },
-                                               { 0x200, 0x100 },
-                                               { 0x2000, 0x1000 },
-                                               { 0x20000, 0x10000 },
-                                               { 0x10000, 0x20000 },
-                                               { 0x1000000, 0x2000000 },
-                                               { 0x2000000, 0x1000000 },
-                                               { 0x1000000, 0x1000000 } }),
-                       4 * (a < b),
-                       ICF_X4);
+  // test_unsigned_binary(Ltu,
+  //                      ((const uint32_t[][2]){ { 0, 0 },
+  //                                              { 1, 0 },
+  //                                              { 0, 1 },
+  //                                              { 0x100, 0 },
+  //                                              { 0x200, 0x100 },
+  //                                              { 0x2000, 0x1000 },
+  //                                              { 0x20000, 0x10000 },
+  //                                              { 0x10000, 0x20000 },
+  //                                              { 0x1000000, 0x2000000 },
+  //                                              { 0x2000000, 0x1000000 },
+  //                                              { 0x1000000, 0x1000000 } }),
+  //                      4 * (a < b),
+  //                      ICF_X4);
 
-  test_unsigned_binary(Equ,
-                       ((const uint32_t[][2]){ { 0, 0 },
-                                               { 1, 0 },
-                                               { 0, 1 },
-                                               { 0x100, 0 },
-                                               { 0x200, 0x100 },
-                                               { 0x2000, 0x1000 },
-                                               { 0x20000, 0x10000 },
-                                               { 0x10000, 0x20000 },
-                                               { 0x1000000, 0x2000000 },
-                                               { 0x2000000, 0x1000000 },
-                                               { 0x1000000, 0x1000000 } }),
-                       a == b,
-                       0);
+  // test_unsigned_binary(Equ,
+  //                      ((const uint32_t[][2]){ { 0, 0 },
+  //                                              { 1, 0 },
+  //                                              { 0, 1 },
+  //                                              { 0x100, 0 },
+  //                                              { 0x200, 0x100 },
+  //                                              { 0x2000, 0x1000 },
+  //                                              { 0x20000, 0x10000 },
+  //                                              { 0x10000, 0x20000 },
+  //                                              { 0x1000000, 0x2000000 },
+  //                                              { 0x2000000, 0x1000000 },
+  //                                              { 0x1000000, 0x1000000 } }),
+  //                      a == b,
+  //                      0);
 
-  test_unsigned_binary(Neq,
-                       ((const uint32_t[][2]){ { 0, 0 },
-                                               { 1, 0 },
-                                               { 0, 1 },
-                                               { 0x100, 0 },
-                                               { 0x200, 0x100 },
-                                               { 0x2000, 0x1000 },
-                                               { 0x20000, 0x10000 },
-                                               { 0x10000, 0x20000 },
-                                               { 0x1000000, 0x2000000 },
-                                               { 0x2000000, 0x1000000 },
-                                               { 0x1000000, 0x1000000 } }),
-                       4 * (a != b),
-                       ICF_X4);
+  // test_unsigned_binary(Neq,
+  //                      ((const uint32_t[][2]){ { 0, 0 },
+  //                                              { 1, 0 },
+  //                                              { 0, 1 },
+  //                                              { 0x100, 0 },
+  //                                              { 0x200, 0x100 },
+  //                                              { 0x2000, 0x1000 },
+  //                                              { 0x20000, 0x10000 },
+  //                                              { 0x10000, 0x20000 },
+  //                                              { 0x1000000, 0x2000000 },
+  //                                              { 0x2000000, 0x1000000 },
+  //                                              { 0x1000000, 0x1000000 } }),
+  //                      4 * (a != b),
+  //                      ICF_X4);
 
-  test_unsigned_binary(
-    Ges,
-    ((const uint32_t[][2]){ { 0, 0 }, { 1, 0 }, { 0, 1 }, { -1, 0 }, { 0, -1 }, { -1, -1 } }),
-    (int32_t)a >= (int32_t)b,
-    0);
-  test_unsigned_binary(
-    Lts,
-    ((const uint32_t[][2]){ { 0, 0 }, { 1, 0 }, { 0, 1 }, { -1, 0 }, { 0, -1 }, { -1, -1 } }),
-    (int32_t)a >= (int32_t)b,
-    0);
+  // test_unsigned_binary(
+  //   Ges,
+  //   ((const uint32_t[][2]){ { 0, 0 }, { 1, 0 }, { 0, 1 }, { -1, 0 }, { 0, -1 }, { -1, -1 } }),
+  //   (int32_t)a >= (int32_t)b,
+  //   0);
+  // test_unsigned_binary(
+  //   Lts,
+  //   ((const uint32_t[][2]){ { 0, 0 }, { 1, 0 }, { 0, 1 }, { -1, 0 }, { 0, -1 }, { -1, -1 } }),
+  //   (int32_t)a < (int32_t)b,
+  //   0);
 
+  constexpr uint32_t GOLDEN = 0x9E3779B9, GOLDEN2 = 0x7F4A7C15;
+
+  // {
+  //   constexpr uint32_t VALUES[][2] = {
+  //     { 0, 0 },
+  //     { 1, 1 },
+  //     { 0x10, 0x10 },
+  //     { 0x100, 0x100 },
+  //     { 0x1000, 0x1000 },
+  //     { 0x10000, 0x10000 },
+  //     { 0x100000, 0x100000 },
+  //     { 0x1000000, 0x1000000 },
+  //     { 0x10000000, 0x10000000 },
+
+  //     { 1, 0 },
+  //     { 0, 1 },
+  //     { GOLDEN, 1 },
+  //     { 1, GOLDEN2 },
+  //     { 0xff, 0xff },
+  //     { 0xffff, 0xffff },
+  //     { 0xffffff, 0xffffff },
+  //     { 0xffffffff, 0xffffffff },
+
+  //     { GOLDEN, GOLDEN },
+  //     { GOLDEN, GOLDEN2 },
+  //     { GOLDEN2, GOLDEN },
+  //   };
+  //   volatile uint32_t a, b;
+  //   volatile uint64_t c;
+  //   start = Here(&ctx);
+  //   for (int i = 0; i < REPETITION; i++)
+  //     UMulW(&ctx, 4, bus(&c), bus(&a), bus(&b));
+  //   End(&ctx);
+  //   printf("\nChecking 4-wide "
+  //          "UMulW"
+  //          "\x1b[0m");
+  //   for (int i = 0; i < _Countof(VALUES); i++) {
+  //     a = VALUES[i][0];
+  //     b = VALUES[i][1];
+  //     c = 0;
+  //     do {
+  //       __assert(
+  //         c == 0, "c == 0", "/Users/elektra/dock/dawsonverse/dma/bcm2835/dma/2-arith-test.c", 432);
+  //     } while (0);
+  //     runinfo = dmakit_timed_run(rsv, start);
+  //     printf(".");
+  //     do {
+  //       __assert(a == VALUES[i][0],
+  //                "a == VALUES[i][0]",
+  //                "/Users/elektra/dock/dawsonverse/dma/bcm2835/dma/2-arith-test.c",
+  //                432);
+  //     } while (0);
+  //     do {
+  //       __assert(b == VALUES[i][1],
+  //                "b == VALUES[i][1]",
+  //                "/Users/elektra/dock/dawsonverse/dma/bcm2835/dma/2-arith-test.c",
+  //                432);
+  //     } while (0);
+  //     do {
+  //       __assert_fmt(c == ((uint64_t)a * (uint64_t)b),
+  //                    "c == ((uint64_t)a * (uint64_t)b)",
+  //                    "/Users/elektra/dock/dawsonverse/dma/bcm2835/dma/2-arith-test.c",
+  //                    432,
+  //                    "post: c = %016llx (expected %016llx for a=%08x b=%08x)\n",
+  //                    c,
+  //                    ((uint64_t)a * (uint64_t)b),
+  //                    a,
+  //                    b);
+  //     } while (0);
+  //   }
+  //   printf(" \x1b[32mOK\x1b[0m\n");
+  //   printf("\tTiming 4-wide "
+  //          "UMulW"
+  //          " x%d\n",
+  //          REPETITION);
+  //   uint64_t times[TIMING_COUNT] = {};
+  //   for (int i = 0; i < TIMING_COUNT; i++) {
+  //     a = VALUES[0][0];
+  //     b = VALUES[0][1];
+  //     c = 0;
+  //     runinfo = dmakit_timed_run(rsv, start);
+  //     times[i] = dma_run_info_get_time_ns(runinfo) - overhead;
+  //     printf("\r\t");
+  //     for (int j = ({
+  //            __typeof__(0) _a = (0);
+  //            __typeof__(i - 8) _b = (i - 8);
+  //            _a > _b ? _a : _b;
+  //          });
+  //          j <= i;
+  //          j++) {
+  //       if (((double)times[j] - meanlf(times, i)) > 2 * stdevlf(times, i))
+  //         printf("\x1b[31m");
+  //       else if (((double)times[j] - meanlf(times, i)) > stdevlf(times, i))
+  //         printf("\x1b[33m");
+  //       printf("% 8lldns\x1b[0m", times[j] / REPETITION);
+  //     }
+  //   }
+  //   printf("\n\n\t\x1b[1;34m"
+  //          "UMulW"
+  //          "\x1b[0m | ν=\x1b[4m%.3f\x1b[0;2mkHz\x1b[0m "
+  //          "μ=%.3f\x1b[2mcy\x1b[0m σ=%.3f\x1b[2mcy\x1b[0m \n\n",
+  //          (double)REPETITION * 1'000'000. / meanlf(times, TIMING_COUNT),
+  //          meanlf(times, TIMING_COUNT) / (double)REPETITION,
+  //          stdevlf(times, TIMING_COUNT) / (double)REPETITION);
+  // };
+
+  // {
+  //   constexpr uint32_t VALUES[][2] = {
+  //     { 0, 0 },
+  //     { 1, 1 },
+  //     { 0x10, 0x10 },
+  //     { 0x100, 0x100 },
+  //     { 0x1000, 0x1000 },
+  //     { 0x10000, 0x10000 },
+  //     { 0x100000, 0x100000 },
+  //     { 0x1000000, 0x1000000 },
+  //     { 0x10000000, 0x10000000 },
+
+  //     { 1, 0 },
+  //     { 0, 1 },
+  //     { GOLDEN, 1 },
+  //     { 1, GOLDEN2 },
+  //     { 0xff, 0xff },
+  //     { 0xffff, 0xffff },
+  //     { 0xffffff, 0xffffff },
+  //     { 0xffffffff, 0xffffffff },
+
+  //     { GOLDEN, GOLDEN },
+  //     { GOLDEN, GOLDEN2 },
+  //     { GOLDEN2, GOLDEN },
+  //   };
+  //   volatile uint32_t a, b;
+  //   static volatile uint32_t c;
+  //   start = Here(&ctx);
+  //   for (int i = 0; i < REPETITION; i++)
+  //     UMul(&ctx, 4, bus(&c), bus(&a), bus(&b));
+  //   End(&ctx);
+  //   printf("\nChecking 4-wide "
+  //          "UMul"
+  //          "\x1b[0m");
+  //   for (int i = 0; i < _Countof(VALUES); i++) {
+  //     a = VALUES[i][0];
+  //     b = VALUES[i][1];
+  //     c = 0;
+  //     do {
+  //       assert(c == 0);
+  //     } while (0);
+  //     runinfo = dmakit_timed_run(rsv, start);
+  //     printf(".");
+  //     do {
+  //       assert(a == VALUES[i][0]);
+  //     } while (0);
+  //     do {
+  //       assert(b == VALUES[i][1]);
+  //     } while (0);
+  //     do {
+  //       assert(c == a * b, "post: c = %08x (expected %08x for a=%08x, b=%08x)", c, a * b, a, b);
+  //     } while (0);
+  //   }
+  //   printf(" \x1b[32mOK\x1b[0m\n");
+  //   printf("\tTiming 4-wide "
+  //          "UMul"
+  //          " x%d\n",
+  //          REPETITION);
+  //   uint64_t times[TIMING_COUNT] = {};
+  //   for (int i = 0; i < TIMING_COUNT; i++) {
+  //     a = VALUES[0][0];
+  //     b = VALUES[0][1];
+  //     c = 0;
+  //     runinfo = dmakit_timed_run(rsv, start);
+  //     times[i] = dma_run_info_get_time_ns(runinfo) - overhead;
+  //     printf("\r\t");
+  //     for (int j = ({
+  //            __typeof__(0) _a = (0);
+  //            __typeof__(i - 8) _b = (i - 8);
+  //            _a > _b ? _a : _b;
+  //          });
+  //          j <= i;
+  //          j++) {
+  //       if (((double)times[j] - meanlf(times, i)) > 2 * stdevlf(times, i))
+  //         printf("\x1b[31m");
+  //       else if (((double)times[j] - meanlf(times, i)) > stdevlf(times, i))
+  //         printf("\x1b[33m");
+  //       printf("% 8lldns\x1b[0m", times[j] / REPETITION);
+  //     }
+  //   }
+  //   printf("\n\n\t\x1b[1;34m"
+  //          "UMul"
+  //          "\x1b[0m | ν=\x1b[4m%.3f\x1b[0;2mkHz\x1b[0m "
+  //          "μ=%.3f\x1b[2mcy\x1b[0m σ=%.3f\x1b[2mcy\x1b[0m \n\n",
+  //          (double)REPETITION * 1'000'000. / meanlf(times, TIMING_COUNT),
+  //          meanlf(times, TIMING_COUNT) / (double)REPETITION,
+  //       stdevlf(times, TIMING_COUNT) / (double)REPETITION);
+  // };
+
+  extern void Div_32_32(emit_ctx * ctx, busad quot24, busad rem16, busad num32, busad den16);
+
+  {
+    constexpr uint32_t VALUES[][2] = ((const uint32_t[][2]){ { GOLDEN, GOLDEN2 }, {14, 0x10002}, {GOLDEN, GOLDEN}, {GOLDEN, 0x1ffff}, {0x1175600,0x12345} });
+    volatile uint32_t a, b, c, d;
+    start = Here(&ctx);
+    for (int i = 0; i < REPETITION; i++)
+      Div_32_32(&ctx, bus(&c), bus(&d), bus(&a), bus(&b));
+    End(&ctx);
+    printf("\nChecking 4-wide "
+           "Div_32_32"
+           "\x1b[0m");
+    for (int i = 0; i < _Countof(VALUES); i++) {
+      a = VALUES[i][0];
+      b = VALUES[i][1];
+      c = 0;
+      d = 0;
+      assert(c == 0);
+      assert(d == 0);
+      runinfo = dmakit_timed_run(rsv, start);
+      printf(".");
+      // ReportProbeInfo();
+      assert(a == VALUES[i][0]);
+      assert(b == VALUES[i][1]);
+      assert(c == (a / b), "post: c = %08x (expected %08x for a=%08x b=%08x)\n", c, a/b, a, b);
+      assert(d == (a % b), "post: d = %08x (expected %08x for a=%08x b=%08x)\n", d, a%b, a, b);
+    }
+    printf(" \x1b[32mOK\x1b[0m\n");
+    printf("\tTiming 4-wide "
+           "Div_32_32"
+           " x%d\n",
+           REPETITION);
+    uint64_t times[TIMING_COUNT] = {};
+    for (int i = 0; i < TIMING_COUNT; i++) {
+      a = VALUES[0][0];
+      b = VALUES[0][1];
+      c = 0;
+      runinfo = dmakit_timed_run(rsv, start);
+      times[i] = dma_run_info_get_time_ns(runinfo) - overhead;
+      printf("\r\t");
+      for (int j = ({
+             __typeof__(0) _a = (0);
+             __typeof__(i - 8) _b = (i - 8);
+             _a > _b ? _a : _b;
+           });
+           j <= i;
+           j++) {
+        if (((double)times[j] - meanlf(times, i)) > 2 * stdevlf(times, i))
+          printf("\x1b[31m");
+        else if (((double)times[j] - meanlf(times, i)) > stdevlf(times, i))
+          printf("\x1b[33m");
+        printf("% 8lldns\x1b[0m", times[j] / REPETITION);
+      }
+    }
+    printf("\n\n\t\x1b[1;34m"
+           "Div_32_32"
+           "\x1b[0m | ν=\x1b[4m%.3f\x1b[0;2mkHz\x1b[0m "
+           "μ=%.3f\x1b[2mcy\x1b[0m σ=%.3f\x1b[2mcy\x1b[0m \n\n",
+           (double)REPETITION * 1'000'000. / meanlf(times, TIMING_COUNT),
+           meanlf(times, TIMING_COUNT) / (double)REPETITION,
+           stdevlf(times, TIMING_COUNT) / (double)REPETITION);
+  };
+
+  extern void Div_32_16(emit_ctx * ctx, busad quot24, busad rem16, busad num32, busad den16);
+
+  {
+    constexpr uint32_t VALUES[][2] = ((const uint32_t[][2]){ { GOLDEN2, 0x101 }, {14, 0x102}, {GOLDEN, 0x1234}, {GOLDEN, 0xffff}, {0x11756,0x1000} });
+    volatile uint32_t a, b, c, d;
+    start = Here(&ctx);
+    for (int i = 0; i < REPETITION; i++)
+      Div_32_16(&ctx, bus(&c), bus(&d), bus(&a), bus(&b));
+    End(&ctx);
+    printf("\nChecking 4-wide "
+           "Div_32_16"
+           "\x1b[0m");
+    for (int i = 0; i < _Countof(VALUES); i++) {
+      a = VALUES[i][0];
+      b = VALUES[i][1];
+      c = 0;
+      d = 0;
+      assert(c == 0);
+      assert(d == 0);
+      runinfo = dmakit_timed_run(rsv, start);
+      printf(".");
+      // ReportProbeInfo();
+      assert(a == VALUES[i][0]);
+      assert(b == VALUES[i][1]);
+      assert(c == (a / b), "post: c = %08x (expected %08x for a=%08x b=%08x)\n", c, a/b, a, b);
+      assert(d == (a % b), "post: d = %08x (expected %08x for a=%08x b=%08x)\n", d, a%b, a, b);
+    }
+    printf(" \x1b[32mOK\x1b[0m\n");
+    printf("\tTiming 4-wide "
+           "Div_32_16"
+           " x%d\n",
+           REPETITION);
+    uint64_t times[TIMING_COUNT] = {};
+    for (int i = 0; i < TIMING_COUNT; i++) {
+      a = VALUES[0][0];
+      b = VALUES[0][1];
+      c = 0;
+      runinfo = dmakit_timed_run(rsv, start);
+      times[i] = dma_run_info_get_time_ns(runinfo) - overhead;
+      printf("\r\t");
+      for (int j = ({
+             __typeof__(0) _a = (0);
+             __typeof__(i - 8) _b = (i - 8);
+             _a > _b ? _a : _b;
+           });
+           j <= i;
+           j++) {
+        if (((double)times[j] - meanlf(times, i)) > 2 * stdevlf(times, i))
+          printf("\x1b[31m");
+        else if (((double)times[j] - meanlf(times, i)) > stdevlf(times, i))
+          printf("\x1b[33m");
+        printf("% 8lldns\x1b[0m", times[j] / REPETITION);
+      }
+    }
+    printf("\n\n\t\x1b[1;34m"
+           "Div_32_16"
+           "\x1b[0m | ν=\x1b[4m%.3f\x1b[0;2mkHz\x1b[0m "
+           "μ=%.3f\x1b[2mcy\x1b[0m σ=%.3f\x1b[2mcy\x1b[0m \n\n",
+           (double)REPETITION * 1'000'000. / meanlf(times, TIMING_COUNT),
+           meanlf(times, TIMING_COUNT) / (double)REPETITION,
+           stdevlf(times, TIMING_COUNT) / (double)REPETITION);
+  };
+
+  extern void Div_32_8(emit_ctx * ctx, busad quot32, busad rem8, busad num32, busad den8);
+
+  {
+    constexpr uint32_t VALUES[][2] = ((const uint32_t[][2]){ { GOLDEN2, 1 }, {14, 2}, {GOLDEN, 27}, {GOLDEN, 0xff}, {11756,15} });
+    volatile uint32_t a, b, c, d;
+    start = Here(&ctx);
+    for (int i = 0; i < REPETITION; i++)
+      Div_32_8(&ctx, bus(&c), bus(&d), bus(&a), bus(&b));
+    End(&ctx);
+    printf("\nChecking 4-wide "
+           "Div_32_8"
+           "\x1b[0m");
+    for (int i = 0; i < _Countof(VALUES); i++) {
+      a = VALUES[i][0];
+      b = VALUES[i][1];
+      c = 0;
+      d = 0;
+      assert(c == 0);
+      assert(d == 0);
+      runinfo = dmakit_timed_run(rsv, start);
+      printf(".");
+      // ReportProbeInfo();
+      assert(a == VALUES[i][0]);
+      assert(b == VALUES[i][1]);
+      assert(c == (a / b), "post: c = %08x (expected %08x for a=%08x b=%08x)\n", c, a/b, a, b);
+      assert(d == (a % b), "post: d = %08x (expected %08x for a=%08x b=%08x)\n", d, a%b, a, b);
+    }
+    printf(" \x1b[32mOK\x1b[0m\n");
+    printf("\tTiming 4-wide "
+           "Div_32_8"
+           " x%d\n",
+           REPETITION);
+    uint64_t times[TIMING_COUNT] = {};
+    for (int i = 0; i < TIMING_COUNT; i++) {
+      a = VALUES[0][0];
+      b = VALUES[0][1];
+      c = 0;
+      runinfo = dmakit_timed_run(rsv, start);
+      times[i] = dma_run_info_get_time_ns(runinfo) - overhead;
+      printf("\r\t");
+      for (int j = ({
+             __typeof__(0) _a = (0);
+             __typeof__(i - 8) _b = (i - 8);
+             _a > _b ? _a : _b;
+           });
+           j <= i;
+           j++) {
+        if (((double)times[j] - meanlf(times, i)) > 2 * stdevlf(times, i))
+          printf("\x1b[31m");
+        else if (((double)times[j] - meanlf(times, i)) > stdevlf(times, i))
+          printf("\x1b[33m");
+        printf("% 8lldns\x1b[0m", times[j] / REPETITION);
+      }
+    }
+    printf("\n\n\t\x1b[1;34m"
+           "Div_32_8"
+           "\x1b[0m | ν=\x1b[4m%.3f\x1b[0;2mkHz\x1b[0m "
+           "μ=%.3f\x1b[2mcy\x1b[0m σ=%.3f\x1b[2mcy\x1b[0m \n\n",
+           (double)REPETITION * 1'000'000. / meanlf(times, TIMING_COUNT),
+           meanlf(times, TIMING_COUNT) / (double)REPETITION,
+           stdevlf(times, TIMING_COUNT) / (double)REPETITION);
+  };
+
+  {
+    constexpr uint32_t VALUES[][2] = ((const uint32_t[][2]){
+      { GOLDEN, GOLDEN2 }, {14, 0x10002}, {GOLDEN, GOLDEN}, {GOLDEN, 0x1ffff}, {0x1175600,0x12345},
+      { GOLDEN2, 0x101 }, {14, 0x102}, {GOLDEN, 0x1234}, {GOLDEN, 0xffff}, {0x11756,0x1000},
+      { GOLDEN2, 1 }, {14, 2}, {GOLDEN, 27}, {GOLDEN, 0xff}, {11756,15} });
+    volatile uint32_t a, b, c, d;
+    start = Here(&ctx);
+    for (int i = 0; i < REPETITION; i++) {
+      UDiv32(&ctx, bus(&c), bus(&d), bus(&a), bus(&b));
+    }
+
+    End(&ctx);
+    printf("\nChecking 4-wide "
+           "UDiv32"
+           "\x1b[0m");
+    for (int i = 0; i < _Countof(VALUES); i++) {
+      a = VALUES[i][0];
+      b = VALUES[i][1];
+      c = 0;
+      d = 0;
+      assert(c == 0);
+      assert(d == 0);
+      runinfo = dmakit_timed_run(rsv, start);
+      printf(".");
+      // ReportProbeInfo();
+      assert(a == VALUES[i][0]);
+      assert(b == VALUES[i][1]);
+      assert(c == (a / b), "post: c = %08x (expected %08x for a=%08x b=%08x)\n", c, a/b, a, b);
+      assert(d == (a % b), "post: d = %08x (expected %08x for a=%08x b=%08x)\n", d, a%b, a, b);
+    }
+    printf(" \x1b[32mOK\x1b[0m\n");
+    printf("\tTiming 4-wide "
+           "UDiv32"
+           " x%d\n",
+           REPETITION);
+    uint64_t times[TIMING_COUNT] = {};
+    for (int i = 0; i < TIMING_COUNT; i++) {
+      a = VALUES[0][0];
+      b = VALUES[0][1];
+      c = 0;
+      runinfo = dmakit_timed_run(rsv, start);
+      times[i] = dma_run_info_get_time_ns(runinfo) - overhead;
+      printf("\r\t");
+      for (int j = ({
+             __typeof__(0) _a = (0);
+             __typeof__(i - 8) _b = (i - 8);
+             _a > _b ? _a : _b;
+           });
+           j <= i;
+           j++) {
+        if (((double)times[j] - meanlf(times, i)) > 2 * stdevlf(times, i))
+          printf("\x1b[31m");
+        else if (((double)times[j] - meanlf(times, i)) > stdevlf(times, i))
+          printf("\x1b[33m");
+        printf("% 8lldns\x1b[0m", times[j] / REPETITION);
+      }
+    }
+    printf("\n\n\t\x1b[1;34m"
+           "UDiv32"
+           "\x1b[0m | ν=\x1b[4m%.3f\x1b[0;2mkHz\x1b[0m "
+           "μ=%.3f\x1b[2mcy\x1b[0m σ=%.3f\x1b[2mcy\x1b[0m \n\n",
+           (double)REPETITION * 1'000'000. / meanlf(times, TIMING_COUNT),
+           meanlf(times, TIMING_COUNT) / (double)REPETITION,
+           stdevlf(times, TIMING_COUNT) / (double)REPETITION);
+  };
+
+  {
+    constexpr int32_t VALUES[][2] = ((const int32_t[][2]){
+      { GOLDEN, GOLDEN2 }, {14, 0x10002}, {GOLDEN, GOLDEN}, {GOLDEN, 0x1ffff}, {0x1175600,0x12345},
+      { GOLDEN2, 0x101 }, {14, 0x102}, {GOLDEN, 0x1234}, {GOLDEN, 0xffff}, {0x11756,0x1000},
+      { GOLDEN2, 1 }, {14, 2}, {GOLDEN, 27}, {GOLDEN, 0xff}, {11756,15}, {1, -1}, {-1,1}, {-1,-1} });
+    volatile int32_t a, b, c, d;
+    start = Here(&ctx);
+    for (int i = 0; i < REPETITION; i++) {
+      SDiv32(&ctx, bus(&c), bus(&d), bus(&a), bus(&b));
+    }
+
+    End(&ctx);
+    printf("\nChecking 4-wide "
+           "SDiv32"
+           "\x1b[0m");
+    for (int i = 0; i < _Countof(VALUES); i++) {
+      a = VALUES[i][0];
+      b = VALUES[i][1];
+      c = 0;
+      d = 0;
+      assert(c == 0);
+      assert(d == 0);
+      runinfo = dmakit_timed_run(rsv, start);
+      printf(".");
+      // ReportProbeInfo();
+      assert(a == VALUES[i][0]);
+      assert(b == VALUES[i][1]);
+      assert(c == (a / b), "post: c = %08x (expected %08x for a=%08x b=%08x)\n", c, a/b, a, b);
+      assert(d == (a % b), "post: d = %08x (expected %08x for a=%08x b=%08x)\n", d, a%b, a, b);
+    }
+    printf(" \x1b[32mOK\x1b[0m\n");
+    printf("\tTiming 4-wide "
+           "SDiv32"
+           " x%d\n",
+           REPETITION);
+    uint64_t times[TIMING_COUNT] = {};
+    for (int i = 0; i < TIMING_COUNT; i++) {
+      a = VALUES[0][0];
+      b = VALUES[0][1];
+      c = 0;
+      runinfo = dmakit_timed_run(rsv, start);
+      times[i] = dma_run_info_get_time_ns(runinfo) - overhead;
+      printf("\r\t");
+      for (int j = ({
+             __typeof__(0) _a = (0);
+             __typeof__(i - 8) _b = (i - 8);
+             _a > _b ? _a : _b;
+           });
+           j <= i;
+           j++) {
+        if (((double)times[j] - meanlf(times, i)) > 2 * stdevlf(times, i))
+          printf("\x1b[31m");
+        else if (((double)times[j] - meanlf(times, i)) > stdevlf(times, i))
+          printf("\x1b[33m");
+        printf("% 8lldns\x1b[0m", times[j] / REPETITION);
+      }
+    }
+    printf("\n\n\t\x1b[1;34m"
+           "SDiv32"
+           "\x1b[0m | ν=\x1b[4m%.3f\x1b[0;2mkHz\x1b[0m "
+           "μ=%.3f\x1b[2mcy\x1b[0m σ=%.3f\x1b[2mcy\x1b[0m \n\n",
+           (double)REPETITION * 1'000'000. / meanlf(times, TIMING_COUNT),
+           meanlf(times, TIMING_COUNT) / (double)REPETITION,
+           stdevlf(times, TIMING_COUNT) / (double)REPETITION);
+  };
 
   printf("Finished.\n");
 

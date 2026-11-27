@@ -6,6 +6,14 @@ __STACK_SIZE = 640K;
 ENTRY(_start)
 ASSERT(DEFINED(_start), "_start MUST be defined")
 
+PHDRS {
+  text PT_LOAD ;
+  rodata PT_LOAD ;
+  data PT_LOAD ;
+  bss PT_LOAD ;
+  stack PT_LOAD ;
+}
+
 SECTIONS {
   .text __LOAD_ADDR : {
     __prog_start = .;
@@ -14,7 +22,7 @@ SECTIONS {
     *(.text*)
     . = ALIGN(__WORD_ALIGN);
     __exec_end = .;
-  }
+  } :text
   .rodata : {
     __rodata_start = .;
     . = ALIGN(__WORD_ALIGN);
@@ -28,13 +36,13 @@ SECTIONS {
 
     . = ALIGN(__WORD_ALIGN);
     __rodata_end = .;
-  }
+  } :rodata
   .data : {
     __data_start = .;
     . = ALIGN(__WORD_ALIGN);
     *(.data*)
     . = ALIGN(__WORD_ALIGN);
-  }
+  } :data
 
   /* IMPORTANT: The linker/objcopy have strong order dependencies. In particular:
 
@@ -44,14 +52,14 @@ SECTIONS {
      Therefore, after this point, all sections MUST be SHT_NOBITS, and before this point, all
      sections MUST NOT be so.
    */
-  .dma (TYPE=SHT_NOBITS): {
-    . = ALIGN(__WORD_ALIGN);
-    __dma_tables_start = .;
-    KEEP(*(.dma.tables*))
-    __dma_tables_end = .;
-    . = ALIGN(__WORD_ALIGN);
-    __data_end = .;
-  }
+  /* .dma (TYPE=SHT_NOBITS) : { */
+    /* . = ALIGN(__WORD_ALIGN); */
+    /* __dma_tables_start = .; */
+    /* KEEP(*(.dma.tables*)) */
+    /* __dma_tables_end = .; */
+    /* . = ALIGN(__WORD_ALIGN); */
+    /* __data_end = .; */
+  /* } :bss */
   .bss : {
     __bss_start = .;
     . = ALIGN(__WORD_ALIGN);
@@ -59,7 +67,7 @@ SECTIONS {
     *(COMMON)
     . = ALIGN(__WORD_ALIGN);
     __bss_end = .;
-  }
+  } :bss
   .stack (TYPE=SHT_NOBITS) : {
     . = ALIGN(__STACK_ALIGN);
     __stack_start = .;
@@ -68,5 +76,5 @@ SECTIONS {
     __stack_init = .;
     __stack_end = .;
     __prog_end = .;
-  }
+  } :stack
 }

@@ -90,7 +90,7 @@ Sll(emit_ctx* c, size_t width, busad ret, busad inp, busad shf8)
 
 _TableSymbol static volatile uint8_t alignas(256) SRL_HYPER_SELECT[256];
 
-INITIALIZER(init_srl)
+INITIALIZER(srl)
 {
   uint32_t i, s;
   for (i = 0; i < (1 << 16); i++)
@@ -163,7 +163,7 @@ Srl(emit_ctx* c, size_t width, busad ret, busad inp, busad shf8)
 _TableSymbol static volatile uint8_t alignas(1<<8) SEXT_WHICH[1<<8];
 _TableSymbol static volatile uint8_t alignas(1<<5) SEXT_BUFS[1<<5];
 
-INITIALIZER(init_sext)
+INITIALIZER(sra_sext)
 {
   uint32_t i;
   for(i=0;i<(1<<8);i++)
@@ -174,7 +174,7 @@ INITIALIZER(init_sext)
 
 _TableSymbol static volatile uint8_t alignas(1<<16) SRA_HI[1<<16];
 
-INITIALIZER(init_sra)
+INITIALIZER(sra)
 {
   uint32_t i, s;
   for(i=0;i<(1<<8);i++)

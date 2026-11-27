@@ -3,25 +3,25 @@ d2 = newlib-cygwin/newlib/libc/string
 newlib_cflags = -I${d2}/
 
 d = build/bcm2835/libc/
-build ${d}/libnewlib.a: arm_mklib $d/memcmp.o $d/memchr.o $d/memmove.o $d/memset.o $
+build ${d}/libnewlib.a: bcm2835_mklib $d/memcmp.o $d/memchr.o $d/memmove.o $d/memset.o $
                                           $d/strstr.o $d/strnlen.o $d/strchr.o
-build $d/memcmp.o: arm_cc $s/memcmp.c
+build $d/memcmp.o: bcm2835_cc $s/memcmp.c
   cflags_ext = $newlib_cflags
-# build $d/memchr.o: arm_cc $s/memchr.c
+# build $d/memchr.o: bcm2835_cc $s/memchr.c
 #   cflags_ext = $newlib_cflags
-build $d/memmove.o: arm_cc $s/memmove.c
+build $d/memmove.o: bcm2835_cc $s/memmove.c
   cflags_ext = $newlib_cflags
-build $d/memset.o: arm_cc $s/memset.c
+build $d/memset.o: bcm2835_cc $s/memset.c
   cflags_ext = $newlib_cflags
-build $d/strstr.o: arm_cc $d2/strstr.c
+build $d/strstr.o: bcm2835_cc $d2/strstr.c
   cflags_ext = $newlib_cflags
-build $d/strnlen.o: arm_cc $d2/strnlen.c
+build $d/strnlen.o: bcm2835_cc $d2/strnlen.c
   cflags_ext = $newlib_cflags
-build $d/strchr.o: arm_cc $d2/strchr.c
+build $d/strchr.o: bcm2835_cc $d2/strchr.c
   cflags_ext = $newlib_cflags
 
 subninja libc/newlib-arm/build.ninja
 
-build bcm2835/libc.a: arm_mergelibs $d/libnewlib.a $d/libnewlib_machine.a
+build bcm2835/libc.a: bcm2835_mergelibs $d/libnewlib.a $d/libnewlib_machine.a
 
 default bcm2835/libc.a

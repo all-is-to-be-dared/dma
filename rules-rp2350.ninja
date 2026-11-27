@@ -1,0 +1,13 @@
+rp2350_cc = ${cc}
+rp2350_ld = ${ld}
+rp2350_ar = ${ar}
+rp2350_objcopy = ${objcopy}
+
+rp2350_cflags_explicit = --target=riscv32imac-unknown-none-elf -fshort-enums
+
+rp2350_cflags = -Wall -O3 -I. -ffreestanding -nostdlib -std=gnu23 $
+  -mcpu=rp2350-hazard3 -mtune=rp2350-hazard3 $
+  -fdiagnostics-color ${rp2350_cflags_explicit} -fno-omit-frame-pointer -g $
+  -fno-math-errno
+rp2350_ldflags = -z noexecstack --gc-sections -nostdlib -melf32lriscv -belf32-littleriscv -static
+

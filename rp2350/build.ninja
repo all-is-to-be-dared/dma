@@ -1,0 +1,18 @@
+b = build/rp2350/platform
+s = rp2350/
+
+
+
+
+# --------------------------------------------------------------------------------------------------
+# TARGET: rp2350/libplatform.a
+
+build $s/libplatform.a: riscv_mklib $
+  $b/init.o $b/backtrace.o $b/printf.o
+
+build $b/init.o: rv_cc $s/init.c
+
+build $b/backtrace.o: rv_cc generic/backtrace.c
+build $b/printf.o: rv_cc printf/printf.c
+
+default $s/libplatform.a

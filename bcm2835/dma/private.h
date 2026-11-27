@@ -195,20 +195,20 @@ typedef struct
 } hw_dmachan_t __attribute__((aligned(0x100)));
 static_assert(offsetof(hw_dmachan_t, debug) == 0x20);
 
-hw_dmachan_t*
+hw_dmachan_t *
 __dma_channel(enum dma_channel_no no);
 
 
 
 
 inline bool
-__dma_is_active(hw_dmachan_t* chan)
+__dma_is_active(hw_dmachan_t *chan)
 {
   return (chan->cs & DMA_CS_IS_ACTIVE) != 0;
 }
 
 inline bool
-__dma_is_error(hw_dmachan_t* chan)
+__dma_is_error(hw_dmachan_t *chan)
 {
   return (chan->cs & DMA_CS_ERROR) != 0;
 }
@@ -235,10 +235,9 @@ struct dma_run_info
 };
 
 struct dma_run_info
-__dma_timed_run(hw_dmachan_t* chan, cblk* init_blk);
+__dma_timed_run(hw_dmachan_t *chan, cblk *init_blk);
 
-uint64_t
-dma_run_info_get_time_ns(struct dma_run_info);
+uint64_t dma_run_info_get_time_ns(struct dma_run_info);
 
 
 
@@ -261,10 +260,10 @@ void
 dmakit_init_channels(void);
 
 bool
-dmakit_channel_acquire(struct dmakit_reservation* rsv, bool allow_lite, const char* who);
+dmakit_channel_acquire(struct dmakit_reservation *rsv, bool allow_lite, const char *who);
 
 void
-dmakit_channel_release(struct dmakit_reservation rsv, const char* who);
+dmakit_channel_release(struct dmakit_reservation rsv, const char *who);
 
 void
 dmakit_dump_channel_reservations(void);
@@ -280,7 +279,7 @@ bool dmakit_channel_is_active(enum dma_channel_no);
 
 
 struct dma_run_info
-dmakit_timed_run(struct dmakit_reservation rsv, cblk* init_blk);
+dmakit_timed_run(struct dmakit_reservation rsv, cblk *init_blk);
 
 
 
@@ -293,17 +292,18 @@ dmakit_timed_run(struct dmakit_reservation rsv, cblk* init_blk);
 
 struct initializer
 {
-  const char* name;
+  const char *name;
   void (*func)(void);
 };
 
 void
 run_initializers(void);
 
-#define INITIALIZER(_name)                                                     \
+#define INITIALIZER(_name)                                                              \
   void __init_##_name(void);                                                            \
-  [[gnu::used, gnu::section(".inittab")]]                                      \
-  const struct initializer _Init__##_name = { .name = #_name, .func = __init_##_name }; \
+  [[gnu::used, gnu::section(".inittab")]]                                  \
+  static const volatile struct initializer _Init__##_name = { .name = #_name,           \
+                                                              .func = __init_##_name }; \
   void __init_##_name(void)
 
 
@@ -317,15 +317,15 @@ run_initializers(void);
 
 struct probe
 {
-  const char* func;
-  const char* name;
-  volatile uint8_t* data;
+  const char *func;
+  char name[32];
+  volatile uint8_t *data;
   size_t size;
 };
 
 #define Probe(name, data, width) _Probe(__PRETTY_FUNCTION__, name, data, width)
 void
-_Probe(const char* func, const char* name, volatile void* data, size_t width);
+_Probe(const char *func, const char *name, volatile void *data, size_t width);
 
 void
 ReportProbeInfo(void);
@@ -341,7 +341,7 @@ ClearProbes(void);
 
 
 
-#define MonomorphizeOn(_Value, _Expr)                       \
+#define MonomorphizeOn(_Value, _Expr)                                  \
   ({                                                                   \
     __typeof__((_Expr)) t;                                             \
     auto v = (_Value);                                                 \
@@ -355,11 +355,11 @@ ClearProbes(void);
 
 struct mono_ctx;
 
-struct mono_ctx*
+struct mono_ctx *
 _mono_get_or_init_ctx(long i, size_t ks, size_t vs);
 
 bool
-_mono_get(struct mono_ctx*, void* value, void* data);
+_mono_get(struct mono_ctx *, void *value, void *data);
 
 void
-_mono_set(struct mono_ctx*, void* value, void* data);
+_mono_set(struct mono_ctx *, void *value, void *data);

@@ -1,13 +1,13 @@
 # --------------------------------------------------------------------------------------------------
 # TARGET: bcm2835-dma/101-scatter
 
-build bcm2835-dma/101-scatter.bin.xz: arm_xz bcm2835-dma/101-scatter.bin
-build bcm2835-dma/101-scatter.bin: arm_objcopy bcm2835-dma/101-scatter.elf
-build bcm2835-dma/101-scatter.elf: arm_link $
+build bcm2835-dma/101-scatter.bin.xz: bcm2835_xz bcm2835-dma/101-scatter.bin
+build bcm2835-dma/101-scatter.bin: bcm2835_objcopy bcm2835-dma/101-scatter.elf
+build bcm2835-dma/101-scatter.elf: bcm2835_link $
   bcm2835-dma/101-scatter.o bcm2835-dma/libcommon.a | bcm2835-dma/common.ld
   ldflags_ext = -Tbcm2835-dma/common.ld
   libs = bcm2835/libgcc.a
-build bcm2835-dma/101-scatter.o: arm_cc bcm2835-dma/101-scatter.c
+build bcm2835-dma/101-scatter.o: bcm2835_cc bcm2835-dma/101-scatter.c
 
 default bcm2835-dma/101-scatter.bin.xz
 
@@ -18,14 +18,14 @@ default bcm2835-dma/101-scatter.bin.xz
 # TARGET: bcm2835-dma/arith_test
 
 build bcm2835-dma/arith_test: phony bcm2835-dma/arith_test.elf.xz bcm2835-dma/arith_test.bin.xz
-build bcm2835-dma/arith_test.bin.xz: arm_xz bcm2835-dma/arith_test.bin
-build bcm2835-dma/arith_test.bin: arm_objcopy bcm2835-dma/arith_test.elf
-build bcm2835-dma/arith_test.elf.xz: arm_xz bcm2835-dma/arith_test.elf
-build bcm2835-dma/arith_test.elf: arm_link $
+build bcm2835-dma/arith_test.bin.xz: bcm2835_xz bcm2835-dma/arith_test.bin
+build bcm2835-dma/arith_test.bin: bcm2835_objcopy bcm2835-dma/arith_test.elf
+build bcm2835-dma/arith_test.elf.xz: bcm2835_xz bcm2835-dma/arith_test.elf
+build bcm2835-dma/arith_test.elf: bcm2835_link $
   bcm2835-dma/arith_test.o bcm2835-dma/arith.o bcm2835-dma/libcommon.a | bcm2835-dma/common.ld
   ldflags_ext = -Tbcm2835-dma/common.ld
   libs = bcm2835/libgcc.a
-build bcm2835-dma/arith_test.o: arm_cc bcm2835-dma/arith_test.c
+build bcm2835-dma/arith_test.o: bcm2835_cc bcm2835-dma/arith_test.c
 
 default bcm2835-dma/arith_test
 
@@ -36,12 +36,12 @@ default bcm2835-dma/arith_test
 # TARGET: bcm2835-dma/240-ubsan
 
 # build bcm2835-dma/240-ubsan: phony bcm2835-dma/240-ubsan.elf.xz
-# build bcm2835-dma/240-ubsan.elf.xz: arm_xz bcm2835-dma/240-ubsan.elf
-# build bcm2835-dma/240-ubsan.elf: arm_link $
+# build bcm2835-dma/240-ubsan.elf.xz: bcm2835_xz bcm2835-dma/240-ubsan.elf
+# build bcm2835-dma/240-ubsan.elf: bcm2835_link $
 #   bcm2835-dma/240-ubsan.o bcm2835/libplatform.a bcm2835/libc.a | bcm2835-dma/common.ld
 #   ldflags_ext = -Tbcm2835-dma/common.ld
 #   libs = bcm2835/libgcc.a
-# build bcm2835-dma/240-ubsan.o: arm_cc bcm2835-dma/240-ubsan.c
+# build bcm2835-dma/240-ubsan.o: bcm2835_cc bcm2835-dma/240-ubsan.c
 #   cflags_ext = -fsanitize=undefined -fsanitize=float-divide-by-zero $
 #                -fsanitize=unsigned-integer-overflow -fsanitize=implicit-conversion $
 #                -fsanitize=local-bounds -fsanitize=vptr -fsanitize=nullability-arg $
@@ -56,12 +56,12 @@ default bcm2835-dma/arith_test
 # TARGET: bcm2835-dma/240-integ
 
 build bcm2835-dma/240-integ: phony bcm2835-dma/240-integ.elf.xz
-build bcm2835-dma/240-integ.elf.xz: arm_xz bcm2835-dma/240-integ.elf
-build bcm2835-dma/240-integ.elf: arm_link $
+build bcm2835-dma/240-integ.elf.xz: bcm2835_xz bcm2835-dma/240-integ.elf
+build bcm2835-dma/240-integ.elf: bcm2835_link $
   bcm2835-dma/240-integ.o bcm2835/libplatform.a bcm2835/libc.a | bcm2835-dma/common.ld
   ldflags_ext = -Tbcm2835-dma/common.ld
   libs = bcm2835/libgcc.a
-build bcm2835-dma/240-integ.o: arm_cc bcm2835-dma/240-integ.c
+build bcm2835-dma/240-integ.o: bcm2835_cc bcm2835-dma/240-integ.c
 
 default bcm2835-dma/240-integ
 
@@ -72,12 +72,12 @@ default bcm2835-dma/240-integ
 # TARGET: bcm2835-dma/240-superopt
 
 build bcm2835-dma/240-superopt: phony bcm2835-dma/240-superopt.elf.xz
-build bcm2835-dma/240-superopt.elf.xz: arm_xz bcm2835-dma/240-superopt.elf
-build bcm2835-dma/240-superopt.elf: arm_link $
+build bcm2835-dma/240-superopt.elf.xz: bcm2835_xz bcm2835-dma/240-superopt.elf
+build bcm2835-dma/240-superopt.elf: bcm2835_link $
   bcm2835-dma/240-superopt.o bcm2835/libplatform.a bcm2835/libc.a | bcm2835-dma/common.ld
   ldflags_ext = -Tbcm2835-dma/common.ld
   libs = bcm2835/libgcc.a
-build bcm2835-dma/240-superopt.o: arm_cc bcm2835-dma/240-superopt.c
+build bcm2835-dma/240-superopt.o: bcm2835_cc bcm2835-dma/240-superopt.c
 
 default bcm2835-dma/240-superopt
 
@@ -88,12 +88,12 @@ default bcm2835-dma/240-superopt
 # TARGET: bcm2835-dma/240-stream
 
 build bcm2835-dma/240-stream: phony bcm2835-dma/240-stream.elf.xz
-build bcm2835-dma/240-stream.elf.xz: arm_xz bcm2835-dma/240-stream.elf
-build bcm2835-dma/240-stream.elf: arm_link $
+build bcm2835-dma/240-stream.elf.xz: bcm2835_xz bcm2835-dma/240-stream.elf
+build bcm2835-dma/240-stream.elf: bcm2835_link $
   bcm2835-dma/240-stream.o bcm2835/libplatform.a bcm2835/libc.a | bcm2835-dma/common.ld
   ldflags_ext = -Tbcm2835-dma/common.ld
   libs = bcm2835/libgcc.a
-build bcm2835-dma/240-stream.o: arm_cc bcm2835-dma/240-stream.c
+build bcm2835-dma/240-stream.o: bcm2835_cc bcm2835-dma/240-stream.c
 
 default bcm2835-dma/240-stream
 
@@ -102,7 +102,7 @@ default bcm2835-dma/240-stream
 # --------------------------------------------------------------------------------------------------
 # TARGET: bcm2835-dma/libcommon.a
 
-build bcm2835-dma/arith.o: arm_cc bcm2835-dma/arith.c
+build bcm2835-dma/arith.o: bcm2835_cc bcm2835-dma/arith.c
 
 
 
@@ -111,7 +111,7 @@ build bcm2835-dma/arith.o: arm_cc bcm2835-dma/arith.c
 # --------------------------------------------------------------------------------------------------
 # TARGET: bcm2835-dma/libcommon.a
 
-build bcm2835-dma/libcommon.a: arm_mergelibs bcm2835-dma/libdma.a bcm2835/libplatform.a bcm2835/libc.a
+build bcm2835-dma/libcommon.a: bcm2835_mergelibs bcm2835-dma/libdma.a bcm2835/libplatform.a bcm2835/libc.a
 
 
 
@@ -119,9 +119,9 @@ build bcm2835-dma/libcommon.a: arm_mergelibs bcm2835-dma/libdma.a bcm2835/libpla
 # --------------------------------------------------------------------------------------------------
 # TARGET: bcm2835-dma/libdma.a
 
-build bcm2835-dma/libdma.a: arm_mklib bcm2835-dma/dmakit.o bcm2835-dma/dma.o bcm2835-dma/private.o
-build bcm2835-dma/dmakit.o: arm_cc bcm2835-dma/dmakit.c
-build bcm2835-dma/dma.o: arm_cc bcm2835-dma/dma.c
-build bcm2835-dma/private.o: arm_cc bcm2835-dma/private.c
+build bcm2835-dma/libdma.a: bcm2835_mklib bcm2835-dma/dmakit.o bcm2835-dma/dma.o bcm2835-dma/private.o
+build bcm2835-dma/dmakit.o: bcm2835_cc bcm2835-dma/dmakit.c
+build bcm2835-dma/dma.o: bcm2835_cc bcm2835-dma/dma.c
+build bcm2835-dma/private.o: bcm2835_cc bcm2835-dma/private.c
 
 default bcm2835-dma/libdma.a

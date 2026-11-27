@@ -1,9 +1,11 @@
+#include "bcm2835/platform.h"
 #include <string.h>
 
 #include <bcm2835/dma/private.h>
 #include <bcm2835/dma/emit.h>
 
 #include <generic/printf.h>
+#include <generic/math.h>
 
 void
 run_initializers(void)
@@ -21,8 +23,11 @@ run_initializers(void)
 
   printf("Running initializers:\n");
   while (init < __inittab_end) {
-    printf("\t[%s]\n", init->name);
+    printf("\t[%s]", init->name);
+    uint64_t start = systmr_read_raw();
     init->func();
+    uint64_t end = systmr_read_raw();
+    printf(" - %lldμs\n", end-start);
     init++;
   }
   printf("Finished running initializers.\n");
@@ -122,11 +127,14 @@ _mono_set(struct mono_ctx* c, void* k, void* d)
 
 
 
-static uint8_t alignas(1 << 16) ARENA_BACKING[1 << 16];
+enum {
+  ARENA_SIZE = 1 << 20,
+};
+static uint8_t alignas(ARENA_SIZE) ARENA_BACKING[ARENA_SIZE];
 arena ARENA = {
   .start = ARENA_BACKING,
   .p = ARENA_BACKING,
-  .end = ARENA_BACKING + (1 << 16),
+  .end = ARENA_BACKING + (ARENA_SIZE),
   .util = 0,
 };
 
@@ -135,9 +143,9 @@ arena ARENA = {
 
 enum
 {
-  PROBE_MAX = 32
+  PROBE_MAX = 64
 };
-struct probe probes[32] = {};
+struct probe probes[PROBE_MAX] = {};
 size_t probecnt = 0;
 
 void
@@ -148,7 +156,10 @@ _Probe(const char* func, const char* name, volatile void* data, size_t width)
 
   printf("Attaching probe #%zu: %s:%s to %p:<%zu>\n", probecnt, func, name, data, width);
 
-  probes[probecnt++] = (struct probe){ func, name, data, width };
+  probes[probecnt] = (struct probe){ func, {}, data, width };
+  // strncpy(probes[probecnt].name, name, sizeof probes[probecnt].name);
+  memcpy(probes[probecnt].name, name, min(sizeof probes[probecnt].name, strlen(name) + 1));
+  probecnt += 1;
 }
 
 void

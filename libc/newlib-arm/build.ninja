@@ -2,38 +2,38 @@ d = build/bcm2835/libc
 s = libc/newlib-arm
 newlib_incl = -Inewlib-cygwin/include -Inewlib-cygwin/newlib/libc/string
 
-build $d/strcmp.o: arm_cc $s/strcmp.S
+build $d/strcmp.o: bcm2835_cc $s/strcmp.S
   cflags_ext = ${newlib_incl}
-build $d/strcpy.o: arm_cc $s/strcpy.c
-  cflags_ext = ${newlib_incl}
-
-build $d/aeabi_memcpy.o: arm_cc $s/aeabi_memcpy.c
-  cflags_ext = ${newlib_incl}
-build $d/aeabi_memmove.o: arm_cc $s/aeabi_memmove.c
-  cflags_ext = ${newlib_incl}
-build $d/aeabi_memmove-soft.o: arm_cc $s/aeabi_memmove-soft.S
-  cflags_ext = ${newlib_incl}
-build $d/aeabi_memset.o: arm_cc $s/aeabi_memset.c
-  cflags_ext = ${newlib_incl}
-build $d/aeabi_memset-soft.o: arm_cc $s/aeabi_memset-soft.S
-  cflags_ext = ${newlib_incl}
-build $d/aeabi_memclr.o: arm_cc $s/aeabi_memclr.c
+build $d/strcpy.o: bcm2835_cc $s/strcpy.c
   cflags_ext = ${newlib_incl}
 
-build $d/memchr-stub.o: arm_cc $s/memchr-stub.c
+build $d/aeabi_memcpy.o: bcm2835_cc $s/aeabi_memcpy.c
   cflags_ext = ${newlib_incl}
-build $d/memchr.o: arm_cc $s/memchr.S
+build $d/aeabi_memmove.o: bcm2835_cc $s/aeabi_memmove.c
   cflags_ext = ${newlib_incl}
-build $d/memcpy-stub.o: arm_cc $s/memcpy-stub.c
+build $d/aeabi_memmove-soft.o: bcm2835_cc $s/aeabi_memmove-soft.S
   cflags_ext = ${newlib_incl}
-build $d/memcpy.o: arm_cc $s/memcpy.S
+build $d/aeabi_memset.o: bcm2835_cc $s/aeabi_memset.c
   cflags_ext = ${newlib_incl}
-build $d/strlen-stub.o: arm_cc $s/strlen-stub.c
+build $d/aeabi_memset-soft.o: bcm2835_cc $s/aeabi_memset-soft.S
   cflags_ext = ${newlib_incl}
-build $d/strlen.o: arm_cc $s/strlen.S
+build $d/aeabi_memclr.o: bcm2835_cc $s/aeabi_memclr.c
   cflags_ext = ${newlib_incl}
 
-build $d/libnewlib_machine.a: arm_mklib $d/strcmp.o $d/strcpy.o $d/aeabi_memcpy.o $
+build $d/memchr-stub.o: bcm2835_cc $s/memchr-stub.c
+  cflags_ext = ${newlib_incl}
+build $d/memchr.o: bcm2835_cc $s/memchr.S
+  cflags_ext = ${newlib_incl}
+build $d/memcpy-stub.o: bcm2835_cc $s/memcpy-stub.c
+  cflags_ext = ${newlib_incl}
+build $d/memcpy.o: bcm2835_cc $s/memcpy.S
+  cflags_ext = ${newlib_incl}
+build $d/strlen-stub.o: bcm2835_cc $s/strlen-stub.c
+  cflags_ext = ${newlib_incl}
+build $d/strlen.o: bcm2835_cc $s/strlen.S
+  cflags_ext = ${newlib_incl}
+
+build $d/libnewlib_machine.a: bcm2835_mklib $d/strcmp.o $d/strcpy.o $d/aeabi_memcpy.o $
   $d/aeabi_memmove.o $d/aeabi_memmove-soft.o $d/aeabi_memset.o $d/aeabi_memset-soft.o $
   $d/aeabi_memclr.o $d/memchr-stub.o $d/memchr.o $d/memcpy-stub.o $d/memcpy.o $d/strlen-stub.o $
   $d/strlen.o

@@ -1,0 +1,93 @@
+
+# --------------------------------------------------------------------------------------------------
+# ARMv6 COMPILER CONFIGURATION
+#
+# TASK :: Edit these in accordance with your system
+
+# bcm2835_cc = /Applications/ArmGNUToolchain/15.3.rel2/arm-none-eabi/bin/arm-none-eabi-gcc
+# bcm2835_ld = arm-none-eabi-ld
+bcm2835_cc = ${cc}
+bcm2835_cxx = ${cxx}
+bcm2835_ld = ${ld}
+bcm2835_ar = ${ar}
+bcm2835_objcopy = ${objcopy}
+# Compiler-specific flags.
+#
+# Example (Clang):
+#
+#     --target=arm-none-eabi --sysroot=/usr/lib/arm-none-eabi -fshort-enums
+#
+#   is required for clang on my machine, but --target isn't a GCC option and the other options would
+#   be superfluous
+# 
+# Example (GCC):
+#
+#     -nostartfiles
+# 
+# bcm2835_cc_explicit = --target=arm-none-eabi --sysroot /usr/lib/arm-none-eabi -fshort-enums
+bcm2835_cc_explicit = --target=arm-none-eabi -fshort-enums $
+                  --sysroot /Applications/ArmGNUToolchain/15.3.rel2/arm-none-eabi/bin/../arm-none-eabi $
+                  --gcc-install-dir=/Applications/ArmGNUToolchain/15.3.rel2/arm-none-eabi/lib/gcc/arm-none-eabi/15.3.1 $
+                  -Wno-multilib-not-found
+# bcm2835_cc_explicit = -nostartfiles
+
+
+
+
+# --------------------------------------------------------------------------------------------------
+# ARMv6 COMPILER RULES
+
+bcm2835_target_flags = -Wall -O3 -I. -ffreestanding -nostdlib -march=armv6zk -mcpu=arm1176jzf-s $
+                       -fdiagnostics-color ${bcm2835_cc_explicit} -fno-omit-frame-pointer -g $
+                       -mfpu=vfp -mfloat-abi=hard -fno-math-errno
+bcm2835_cflags       = -std=gnu23 ${bcm2835_target_flags} -Wuninitialized
+bcm2835_cxxflags     = -std=gnu++2d ${bcm2835_target_flags} -fno-exceptions -fno-rtti $
+                       -D_LIBCPP_HAS_NO_VENDOR_AVAILABILITY_ANNOTATIONS=1 -D_LIBCPP_DISABLE_AVAILABILITY=1 $
+                       -D_LIBCPP_HAS_NO_THREADS $
+                       -nostdinc++
+bcm2835_ldflags      = -z noexecstack --gc-sections -static
+
+# params: cflags_ext
+rule bcm2835_cc
+  command = ${bcm2835_cc} -MD -MF ${out}.d ${bcm2835_cflags} ${cflags_ext} $
+            -D__CAPTURED_CFLAGS="\"${bcm2835_cflags} ${cflags_ext}\"" -c ${in} -o ${out}
+  deps = gcc
+  depfile = ${out}.d
+  description = ${_green}[bcm2835_CC]${_reset} ${out}
+
+# params: cxxflags_ext
+rule bcm2835_cxx
+  command = ${bcm2835_cxx} -MD -MF ${out}.d ${bcm2835_cxxflags} ${cxxflags_ext} $
+            -D__CAPTURED_CFLAGS="\"${bcm2835_cxxflags} ${cflags_ext}\"" -c ${in} -o ${out}
+  deps = gcc
+  depfile = ${out}.d
+  description = ${_green}[bcm2835_CXX]${_reset} ${out}
+
+# params: ldflags_ext
+rule bcm2835_link
+  command = ${bcm2835_ld} ${bcm2835_ldflags} ${ldflags_ext} ${in} ${libs} -o ${out}
+  description = ${_green}[bcm2835_LD]${_reset} ${out}
+
+rule bcm2835_mklib
+  command = ${bcm2835_ar} rcs ${out} ${in}
+  description = ${_green}[bcm2835_AR]${_reset} ${out}
+
+rule bcm2835_link_partial
+  command = ${bcm2835_ld} -r -o ${out} ${in}
+
+rule bcm2835_objcopy
+  command = ${bcm2835_objcopy} -O binary ${in} ${out}
+  description = ${_green}[bcm2835_OCP]${_reset} ${out}
+
+rule pi-install
+  command = bin/pi-install ${in}
+  description = ${_green}[PI-INSTALL]${_reset} ${in}
+
+rule bcm2835_xz
+  command = xz --arm -k --threads=1 -9 --check=crc32 --lzma2=dict=1Mi $in -c > $out
+  description = ${_green}[bcm2835_XZ]${_reset} ${out}
+
+rule bcm2835_mergelibs
+  command = scripts/mergelibs.mri.sh ${out} ${in} | ${bcm2835_ar} -M
+  description = ${_green}[ARM_MERGELIBS]${_reset} ${out} < ${in}
+

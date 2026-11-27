@@ -21,6 +21,24 @@ _TableSymbol static volatile alignas(256) uint8_t ANTIPOLAR_TRUTH_X4[256];
 
 
 
+INITIALIZER(sgnb8)
+{
+  for(int i = 0;i<256;i++)
+    SUPER[i<<8|SUPER_SGNB8] = (i & 0x80) ? 8 : 0;
+}
+
+
+
+
+INITIALIZER(sextb)
+{
+  for(int i = 0;i<256;i++)
+    SUPER[i<<8|SUPER_SEXTB] = (i & 0x80) ? 0xff : 0;
+}
+
+
+
+
 INITIALIZER(geu)
 {
   for (uint16_t i = 0; i < 256; i++)

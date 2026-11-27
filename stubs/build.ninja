@@ -1,9 +1,9 @@
 # -------------------------------------------------------------------------------------------------
 # TARGET: stubs/blink.bin
 
-build stubs/blink.bin: arm_objcopy stubs/blink.elf
-build stubs/blink.elf: arm_link stubs/blink.o
-build stubs/blink.o: arm_cc stubs/blink.S
+build stubs/blink.bin: bcm2835_objcopy stubs/blink.elf
+build stubs/blink.elf: bcm2835_link stubs/blink.o
+build stubs/blink.o: bcm2835_cc stubs/blink.S
 
 default stubs/blink.bin
 
@@ -13,8 +13,8 @@ default stubs/blink.bin
 # -------------------------------------------------------------------------------------------------
 # TARGET: stubs/hang.bin
 
-build stubs/hang.elf.xz: arm_xz stubs/hang.elf
-build stubs/hang.elf: arm_link stubs/hang.o
-build stubs/hang.o: arm_cc stubs/hang.S
+build stubs/hang.elf.xz: bcm2835_xz stubs/hang.elf
+build stubs/hang.elf: bcm2835_link stubs/hang.o
+build stubs/hang.o: bcm2835_cc stubs/hang.S
 
 default stubs/hang.elf.xz

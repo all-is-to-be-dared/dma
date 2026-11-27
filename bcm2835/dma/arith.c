@@ -6,6 +6,7 @@
 
 
 _TableSymbol volatile uint8_t alignas(256) ZERO[256] = {};
-_TableSymbol volatile uint8_t alignas(1 << 24) HYPER[1 << 24];
+// _TableSymbol volatile uint8_t alignas(1 << 24) HYPER[1 << 24];
+_TableSymbol volatile uint8_t *HYPER = NULL;
 _TableSymbol volatile uint8_t alignas(1 << 16) SUPER[1 << 16];
 

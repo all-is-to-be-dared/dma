@@ -3,6 +3,8 @@
 #include <string.h>
 #include <bcm2835/dma/private.h>
 
+#include <generic/printf.h>
+
 /* -------------------------------------------------------------------------------------------------
    BUS ADDRESS MANIPULATION */
 
@@ -155,7 +157,7 @@ End(emit_ctx* ctx)
 
 
 
-static inline void
+static inline cblk*
 EmitStridedWith(emit_ctx* ctx,
                 uint32_t flags,
                 busad dst,
@@ -181,9 +183,19 @@ EmitStridedWith(emit_ctx* ctx,
   cb->txfr_len = length(rows - 1, cols);
   cb->stride = stride(dst_stride, src_stride);
   cb->next_cb = bus(ctx->p);
+
+    // printf("TI=%08x DA=%08x SA=%08x LN=%08x ST=%08x NX=%08x\n",
+    //        cb->ti,
+    //        cb->dst_addr._0,
+    //        cb->src_addr._0,
+    //        cb->txfr_len,
+    //        cb->stride,
+    //        cb->next_cb._0);
+
+  return cb;
 }
 
-static inline void
+static inline cblk*
 EmitStrided(emit_ctx* ctx,
             busad dst,
             busad src,
@@ -192,14 +204,14 @@ EmitStrided(emit_ctx* ctx,
             uint16_t dst_stride,
             uint16_t src_stride)
 {
-  EmitStridedWith(
+  return EmitStridedWith(
     ctx, TI_DST_INC | TI_SRC_INC | TI_2DMODE, dst, src, rows, cols, dst_stride, src_stride);
 }
 
 
 
 
-static inline void
+static inline cblk *
 EmitWith(emit_ctx* ctx, uint32_t flags, busad dst, busad src, size_t len)
 {
   cblk* cb;
@@ -215,12 +227,22 @@ EmitWith(emit_ctx* ctx, uint32_t flags, busad dst, busad src, size_t len)
   cb->src_addr = src;
   cb->txfr_len = len;
   cb->next_cb = bus(ctx->p);
+
+    // printf("TI=%08x DA=%08x SA=%08x LN=%08x ST=%08x NX=%08x\n",
+    //        cb->ti,
+    //        cb->dst_addr._0,
+    //        cb->src_addr._0,
+    //        cb->txfr_len,
+    //        cb->stride,
+    //        cb->next_cb._0);
+
+  return cb;
 }
 
-static inline void
+static inline cblk*
 Emit(emit_ctx* ctx, busad dst, busad src, size_t len)
 {
-  EmitWith(ctx, TI_DST_INC | TI_SRC_INC, dst, src, len);
+  return EmitWith(ctx, TI_DST_INC | TI_SRC_INC, dst, src, len);
 }
 
 

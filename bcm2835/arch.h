@@ -43,7 +43,7 @@ pmu_enable(void)
 static inline void
 icache_set_enabled(bool enabled)
 {
-  register uint32_t t;
+  uint32_t t;
   __asm__ volatile ("mrc p15, 0, %0, c1, c0, 0" : "=r"(t));
   if(enabled)
     t |= (1 << 12);
@@ -55,7 +55,7 @@ icache_set_enabled(bool enabled)
 static inline void
 brpdx_set_enabled(bool enabled)
 {
-  register uint32_t t;
+  uint32_t t;
   __asm__ volatile ("mrc p15, 0, %0, c1, c0, 0" : "=r"(t));
   if(enabled)
     t |= (1 << 11);
@@ -67,7 +67,7 @@ brpdx_set_enabled(bool enabled)
 static inline void
 dcache_set_enabled(bool enabled)
 {
-  register uint32_t t;
+  uint32_t t;
   __asm__ volatile ("mrc p15, 0, %0, c1, c0, 0" : "=r"(t));
   if(enabled)
     t |= (1 << 2);
