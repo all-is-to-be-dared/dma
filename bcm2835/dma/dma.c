@@ -66,10 +66,10 @@ __dma_timed_run(hw_dmachan_t* chan, cblk* init_blk)
 
   if (!(status & DMA_ERROR_ANY) &&
       (status & (DMA_ERROR_READ | DMA_ERROR_FIFO | DMA_ERROR_AXI_READ_LAST))) {
-    panic("dma_timed_run: CS has ERROR bit set, but DEBUG has no error bits set\n");
+    panic("dma_timed_run: DEBUG has error bits set, but CS has ERROR bit clear\n");
   } else if ((status & DMA_ERROR_ANY) &&
              !(status & (DMA_ERROR_READ | DMA_ERROR_FIFO | DMA_ERROR_AXI_READ_LAST))) {
-    panic("dma_timed_run: DEBUG has error bits set, but CS has ERROR bit clear\n");
+    panic("dma_timed_run: CS has ERROR bit set, but DEBUG has no error bits set\n");
   }
 
   if (chan->cs & DMA_CS_OUTSTANDING_WRITES)

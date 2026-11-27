@@ -346,7 +346,7 @@ ClearProbes(void);
     __typeof__((_Expr)) t;                                             \
     auto v = (_Value);                                                 \
     static struct mono_ctx ctx; \
-    _mono_get_or_init_ctx(&ctx, sizeof t, sizeof v); \
+    _mono_get_or_init_ctx(&ctx, sizeof v, sizeof t); \
     if (!_mono_get(&ctx, &v, &t)) {                                     \
       t = (_Expr);                                                     \
       _mono_set(&ctx, &v, &t);                                          \

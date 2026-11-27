@@ -795,7 +795,7 @@ riscv_build_emulator(emit_ctx *ctx)
 #define dispatch_reg_arith(f3, f7, lbl)                                               \
   static_assert((f7 & 0xc0) == 0,                                                     \
                 "current dispatch_reg_ar doesn't handle f7 with upper 2 bits set_w"); \
-  dispatch_reg_ar[(f3 | f7)] = lbl._0;
+  dispatch_reg_ar[(f3<<2 | f7)] = lbl._0;
 
     dispatch_reg_arith(0, 0, $add);
     dispatch_reg_arith(0, 0, $add);

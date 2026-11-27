@@ -202,8 +202,8 @@ main(void)
     End(&ctx);                                                                                  \
     printf("\nChecking 4-wide " #_Name_ "\x1b[0m");                                             \
     for (int i = 0; i < _Countof(VALUES); i++) {                                                \
-      a = VALUES[0][0];                                                                         \
-      b = VALUES[0][1];                                                                         \
+      a = VALUES[i][0];                                                                         \
+      b = VALUES[i][1];                                                                         \
       c = 0;                                                                                    \
       assert(c == 0);                                                                           \
       runinfo = dmakit_timed_run(rsv, start);                                                   \
@@ -222,8 +222,8 @@ main(void)
     printf("\tTiming 4-wide " #_Name_ " x%d\n", REPETITION);                                    \
     uint64_t times[TIMING_COUNT] = {};                                                          \
     for (int i = 0; i < TIMING_COUNT; i++) {                                                    \
-      a = VALUES[i][0];                                                                         \
-      b = VALUES[i][1];                                                                         \
+      a = VALUES[0][0];                                                                         \
+      b = VALUES[0][1];                                                                         \
       c = 0;                                                                                    \
       runinfo = dmakit_timed_run(rsv, start);                                                   \
       times[i] = dma_run_info_get_time_ns(runinfo) - overhead;                                  \
@@ -440,7 +440,10 @@ main(void)
   extern void Div_32_16(emit_ctx * ctx, busad quot24, busad rem16, busad num32, busad den16);
 
   {
-    constexpr uint32_t VALUES[][2] = ((const uint32_t[][2]){ { GOLDEN2, 0x101 }, {14, 0x102}, {GOLDEN, 0x1234}, {GOLDEN, 0xffff}, {0x11756,0x1000} });
+    constexpr uint32_t VALUES[][2] = ((const uint32_t[][2]){ { GOLDEN2, 0x101 }, {14, 0x102}, {GOLDEN, 0x1234}, {GOLDEN, 0xffff}, {0x11756,0x1000},
+      // regression
+      {0xb9492f25 , 0x8fbd}
+       });
     volatile uint32_t a, b, c, d;
     start = Here(&ctx);
     for (int i = 0; i < REPETITION; i++)

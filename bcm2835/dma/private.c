@@ -111,6 +111,8 @@ _mono_set(struct mono_ctx* c, void* k, void* d)
 
   // printf("!set\n");
 
+  assert(c->keysz <= 8 && c->valsz <= 8, "KSZ=%zu VSZ=%zu\n", c->keysz, c->valsz);
+
   assert(curr_mono < MAX_MONO);
   m = MONOS + curr_mono++;
   m->key = arena_alloc(&ARENA, c->keysz, 4); // arbitrary align

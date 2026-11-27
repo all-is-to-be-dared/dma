@@ -183,7 +183,7 @@ Div_32_16(emit_ctx *ctx, busad quot24, busad rem16, busad num32, busad den16)
       volatile void *num = i == 2 ? (void *)&State_32_16.NUM[i + 1] : &State_32_16.REM[i + 1];
       Emit(ctx, bus_rel_fld($_d0, +2, FLD_SRC, 1), bus(num), 2);
       Emit(ctx, bus_rel_fld($_d0, +2, FLD_SRC, 0), bus(&State_32_16.DEN[1]), 1);
-      EmitStrided(ctx, bus(&State_32_16.QHAT[i]), bus(QHAT), 2, 1, -129, 0); // +2
+      EmitStrided(ctx, bus(&State_32_16.QHAT[i]), bus(QHAT), 2, 1, 0, -129); // +2
       Emit(ctx, bus_rel_fld($_d0, +4, FLD_SRC, 0), bus_rel_fld($_d0, +2, FLD_SRC, 0), 3);
       Emit(ctx, bus(&State_32_16.RHAT[i]), bus(RHAT), 1); // +4
 
@@ -485,12 +485,13 @@ struct SDiv32_Tables
   // indirection tables
   volatile alignas(256) uint32_t A_ABS[2];
   volatile alignas(256) uint32_t B_ABS[2];
-  volatile alignas(1 << 16) uint32_t QUOT_SIGN_TABLE[1 << 16];
+  // volatile alignas(1 << 16) uint32_t QUOT_SIGN_TABLE[1 << 16];
+  volatile alignas(256) uint32_t QUOT_SIGN_TABLE[4];
   volatile alignas(256) uint32_t QUOT_ZERO_TABLE[2];
   volatile alignas(256) uint32_t REM_SIGN_TABLE[2];
 };
 
-INITIALIZER(sdiv_equzb4)
+INITIALIZER(sgnb4)
 {
   for (int i = 0; i < 256; i++)
     SUPER[i << 8 | SUPER_SGNB4] = (i & 0x80) ? 4 : 0;
@@ -499,7 +500,7 @@ INITIALIZER(sdiv_equzb4)
 void
 SDiv32(emit_ctx *ctx, busad quot, busad rem, busad a32, busad b32)
 {
-  struct SDiv32_Tables *tables = arena_alloc(&ARENA, sizeof *tables, 1 << 16);
+  struct SDiv32_Tables *tables = arena_alloc(&ARENA, sizeof *tables, alignof(struct SDiv32_Tables));
   memset(tables, 0, sizeof *tables);
 
   cblk *_xa_to_sign_table, *_xb_to_sign_table, *_xa_to_rem_sign_table, *_bz_to_qzero_table;
@@ -513,16 +514,16 @@ SDiv32(emit_ctx *ctx, busad quot, busad rem, busad a32, busad b32)
 
     busad $0 = Label(ctx);
     Emit(ctx, bus_rel_fld($0, +1, FLD_SRC, 1), bus_add(a32, 3), 1);
-    Emit(ctx, bus(X_A), bus_(SUPER, SUPER_SGNB4), 1);
+    Emit(ctx, bus(X_A), bus_(SUPER, SUPER_SGNB4), 1); // 4 if <0, else 0
     Emit(ctx, bus_rel_fld($0, +3, FLD_SRC, 1), bus_add(b32, 3), 1);
-    Emit(ctx, bus(X_B), bus_(SUPER, SUPER_SGNB4), 1);
+    Emit(ctx, bus(X_B), bus_(SUPER, SUPER_SGNB4), 1); // 4 if <0, else 0
     Equ(ctx, 4, bus(B_Z), b32, bus(ZERO), ICF_X4);
 
     busad $load_a_abs = Label(ctx);
     Emit(ctx, bus_rel_fld($load_a_abs, +1, FLD_SRC, 0), bus(X_A), 1);
     Emit(ctx, bus_rel_fld($load_a_abs, +2, FLD_NXT, 0), bus(tables->A_ABS), 4);
     _xa_to_sign_table = Here(ctx);
-    Emit(ctx, bus(ZERO), bus(X_A), 1);
+    Emit(ctx, bus_null(), bus(X_A), 1);
 
     tables->A_ABS[1] = Label(ctx)._0;
     Neg(ctx, 4, bus(A_U), a32);
@@ -534,7 +535,7 @@ SDiv32(emit_ctx *ctx, busad quot, busad rem, busad a32, busad b32)
     Emit(ctx, bus_rel_fld($load_b_abs, +1, FLD_SRC, 0), bus(X_B), 1);
     Emit(ctx, bus_rel_fld($load_b_abs, +2, FLD_NXT, 0), bus(tables->B_ABS), 4);
     _xb_to_sign_table = Here(ctx);
-    Emit(ctx, bus(ZERO), bus(X_B), 1);
+    Emit(ctx, bus_null(), bus(X_B), 1);
 
     tables->B_ABS[1] = Label(ctx)._0;
     Neg(ctx, 4, bus(B_U), b32);
@@ -543,9 +544,9 @@ SDiv32(emit_ctx *ctx, busad quot, busad rem, busad a32, busad b32)
     Emit(ctx, bus(B_U), b32, 4);
 
     _xa_to_rem_sign_table = Here(ctx);
-    Emit(ctx, bus(ZERO), bus(X_A), 1);
+    Emit(ctx, bus_null(), bus(X_A), 1);
     _bz_to_qzero_table = Here(ctx);
-    Emit(ctx, bus(ZERO), bus(B_Z), 1);
+    Emit(ctx, bus_null(), bus(B_Z), 1);
     UDiv32(ctx, quot, rem, bus(A_U), bus(B_U));
   }
 
@@ -559,17 +560,22 @@ SDiv32(emit_ctx *ctx, busad quot, busad rem, busad a32, busad b32)
 
   busad $quot_dispatch = Label(ctx);
   tables->QUOT_ZERO_TABLE[0] = $quot_dispatch._0;
-  _xa_to_sign_table->dst_addr = bus_rel_fld($quot_dispatch, +0, FLD_SRC, 0);
-  _xb_to_sign_table->dst_addr = bus_rel_fld($quot_dispatch, +0, FLD_SRC, 1);
-  Emit(ctx, bus_rel_fld($quot_dispatch, +1, FLD_NXT, 0), bus(tables->QUOT_SIGN_TABLE), 4);
-  Emit(ctx, bus(ZERO), bus(ZERO), 4);
+  // Results are:
+  // Okay, way to do this that uses way less memory: take (X_A<<1 + X_B) instead of (X_A<<8|X_B)
+
+  _xa_to_sign_table->dst_addr = bus_rel_fld($quot_dispatch, +0, FLD_SRC, 2);
+  Emit(ctx, bus_rel_fld($quot_dispatch,+1,FLD_SRC,2), bus_(HYPER, 1<<8|HYPER_SLL8B), 1);
+  _xb_to_sign_table->dst_addr = bus_rel_fld($quot_dispatch, +1, FLD_SRC, 1);
+  Emit(ctx, bus_rel_fld($quot_dispatch,+2,FLD_SRC,0), bus_(HYPER, HYPER_OR), 1);
+  Emit(ctx, bus_rel_fld($quot_dispatch, +3, FLD_NXT, 0), bus(tables->QUOT_SIGN_TABLE), 4);
+  Emit(ctx, bus_null(), bus_null(), 0);
 
   busad $qneg = Label(ctx);
-  tables->QUOT_SIGN_TABLE[0x100] = tables->QUOT_SIGN_TABLE[0x001] = $qneg._0;
+  tables->QUOT_SIGN_TABLE[2] = tables->QUOT_SIGN_TABLE[1] = $qneg._0;
   Neg(ctx, 4, quot, quot);
 
   busad $rem_dispatch = Label(ctx);
-  tables->QUOT_SIGN_TABLE[0x000] = tables->QUOT_SIGN_TABLE[0x101] = $rem_dispatch._0;
+  tables->QUOT_SIGN_TABLE[0] = tables->QUOT_SIGN_TABLE[3] = $rem_dispatch._0;
   tables->QUOT_ZERO_TABLE[1] = $rem_dispatch._0;
   _xa_to_rem_sign_table->dst_addr = bus_rel_fld($rem_dispatch, +0, FLD_SRC, 0);
   Emit(ctx, bus_rel_fld($rem_dispatch, +1, FLD_NXT, 0), bus(tables->REM_SIGN_TABLE), 4);
