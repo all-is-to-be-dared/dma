@@ -287,7 +287,7 @@ RVTrapEntry(emit_ctx *ctx)
        bus_(HYPER, MSTATUS_BYTE1_MPP_MASK << 8 | HYPER_BIC),
        1);
   Emit(ctx, bus_rel_fld($trap_save_priv, +3, FLD_SRC,2), bus(&RV->PRIV), 1);
-  Emit(ctx, bus_rel_fld($trap_save_priv, +4, FLD_SRC, 1), bus_(HYPER,3<<8|HYPER_SLL), 1);
+  Emit(ctx, bus_rel_fld($trap_save_priv, +4, FLD_SRC, 1), bus_(HYPER,3<<8|HYPER_SLL8B), 1);
   Emit(ctx, bus_(&RV->MSTATUS, 1), bus_(HYPER, HYPER_OR), 1);
   Emit(ctx, bus(&RV->PRIV), Const32(RV_PRIV_M), 4);
 
@@ -499,7 +499,7 @@ riscv_build_emulator(emit_ctx *ctx)
     Emit(ctx, bus_rel_fld($jal_wb, +1, FLD_SRC, 1), bus_(&RV_Decoder.inst, 2), 2);
     busad $3 = Label(ctx);
     Emit(ctx, bus_rel_fld($3,+1,FLD_SRC,2), bus_(&RV_Decoder.inst, 1), 1);
-    Emit(ctx, bus_rel_fld($jal_wb, +1, FLD_SRC, 0), bus_(HYPER, 0xf0|HYPER_AND), 1);
+    Emit(ctx, bus_rel_fld($jal_wb, +1, FLD_SRC, 0), bus_(HYPER, 0xf0<<8|HYPER_AND), 1);
     // And(ctx, 1, bus_rel_fld($jal_wb, +1, FLD_SRC, 0), bus_(&RV_Decoder.inst, 0), Const8(0xf0));
     Branch(ctx, $jal_wb);
   }
@@ -541,9 +541,10 @@ riscv_build_emulator(emit_ctx *ctx)
     busad $3 = Label(ctx);
     Emit(ctx, bus_rel_fld($3, +1, FLD_SRC, 1), bus_(&RV_Decoder.inst, 2), 2);
     Emit(ctx, bus(tmp), bus_(HYPER, HYPERV_OP_IMM12_SEXTW), 4);
-    Emit(ctx, bus_rel_fld($3, +3, FLD_SRC, 2), bus(tmp), 1);
-    Emit(ctx, bus(tmp), bus_(HYPER, 0xfe << 8 | HYPER_AND), 1);
     Add(ctx, 4, bus(&RV->PC), bus(tmp), bus(rs1));
+    busad $4 = Label(ctx);
+    Emit(ctx, bus_rel_fld($4, +1, FLD_SRC, 2), bus(&RV->PC), 1);
+    Emit(ctx, bus(&RV->PC), bus_(HYPER, 0xfe << 8 | HYPER_AND), 1);
     Branch(ctx, $jalr_wb);
   }
 
@@ -783,7 +784,7 @@ riscv_build_emulator(emit_ctx *ctx)
     // ----- Register arithmetic dispatcher
 
     // funct3 and funct7 decode. i have funct3x4 and funct7x1, so i use (funct3x4 | funct7x1)<<2
-    // funct3 values cover 000xxx00
+    // funct3x4 values cover 000xxx00
     // funct7 values cover 00x0000x
     enum
     {
@@ -843,12 +844,12 @@ riscv_build_emulator(emit_ctx *ctx)
       busad $2 = Label(ctx);
       Emit(ctx, bus_rel_fld($2, +1, FLD_SRC, 1), bus_(&RV_Decoder.inst, 2), 2);
       Emit(ctx, bus_rel_fld($2, +2, FLD_SRC, 2), bus_(HYPER, HYPERV_OP_C_FUNCT7), 1);
-      Emit(ctx, bus_rel_fld($2, +3, FLD_SRC, 2), bus_(HYPER, (2 << 8) | HYPER_SLL8B), 1);
-      _funct3_loader->dst_addr = bus_rel_fld($2, +3, FLD_SRC, 1);
-      Emit(ctx, bus_rel_fld($2, +4, FLD_SRC, 0), bus_(HYPER, HYPER_OR), 1);
-      cblk *_dispatch_loader = Emit(ctx, bus_null(), bus(dispatch_reg_ar), 4);  // $2+5
-      Emit(ctx, bus_rel_fld($2, +7, FLD_SRC, 1), bus_(&RV_Decoder.inst, 2), 2); // $2+6
-      cblk *_rs2_loader = Emit(ctx, bus_null(), bus_(HYPER, HYPERV_OP_C_RS2_X4), 1);
+      _funct3_loader->dst_addr = bus_rel_fld($2, +2, FLD_SRC, 1);
+      Emit(ctx, bus_rel_fld($2, +3, FLD_SRC, 2), bus_(HYPER, HYPER_OR), 1);
+      Emit(ctx, bus_rel_fld($2, +4, FLD_SRC, 0), bus_(HYPER, (2 << 8) | HYPER_SLL8B), 1);
+      cblk *_dispatch_loader = Emit(ctx, bus_null(), bus(dispatch_reg_ar), 4);  // $2+4
+      Emit(ctx, bus_rel_fld($2, +6, FLD_SRC, 1), bus_(&RV_Decoder.inst, 2), 2); // $2+5
+      cblk *_rs2_loader = Emit(ctx, bus_null(), bus_(HYPER, HYPERV_OP_C_RS2_X4), 1); // $2+6
 
       busad $3 = Label(ctx);
 
@@ -1371,7 +1372,7 @@ riscv_build_emulator(emit_ctx *ctx)
       //             PRIORITY[1] is nonzero). PENDING[0].1 will be cleared. MEIP will be cleared in
       //             the MIP CSR.
       //             otherwise return 0 (no other bits of the PENDING register are ever set).
-      Emit(ctx, $lw_wb_ctrl, ConstAd(&HYPER[1 << 8 | HYPER_SRL]), 4);
+      Emit(ctx, $lw_wb_ctrl, ConstAd(&HYPER[1 << 8 | HYPER_SRL8B]), 4);
       Emit(ctx, bus_add($lw_wb_ctrl, 2), bus(&RV->PLIC_PENDING[0]), 1);
       // XXX: Note: this clears the PENDING[0].0-.7
       Emit(ctx, bus(&RV->PLIC_PENDING[0]), bus(ZERO), 1); // clear PENDING[0].1
@@ -1655,14 +1656,14 @@ riscv_build_emulator(emit_ctx *ctx)
       // TODO: can probably switch to a SUPER table, but not super high-priority
       Emit(ctx, bus_rel_fld($mret,+1,FLD_SRC,2), bus_(&RV->MSTATUS,1), 1);
       Emit(ctx, bus_rel_fld($mret,+2,FLD_SRC,2), bus_(HYPER,MSTATUS_BYTE1_MPP_MASK<<8|HYPER_AND), 1);
-      Emit(ctx, bus(&RV->PRIV), bus_(HYPER,3<<8|HYPER_SRL), 1);
+      Emit(ctx, bus(&RV->PRIV), bus_(HYPER,3<<8|HYPER_SRL8B), 1);
       //
       busad $mret_0 = Label(ctx);
-      EmitStrided(ctx, bus_rel_fld($mret_0,+1,FLD_SRC,2), bus_(&RV->MSTATUS,0), 2, 1, 31, 0);
+      EmitStrided(ctx, bus_rel_fld($mret_0,+1,FLD_SRC,1), bus_(&RV->MSTATUS,0), 2, 1, 31, 0);
       // Emit(ctx, bus_rel_fld($mret_0,+3,FLD_SRC,1), bus_(HYPER,0x88<<8|HYPER_BIC), 1);
       // SUPERV_HandleMPIEOnMRET already handles the 0x88 mask
       Emit(ctx, bus_(&RV->MSTATUS,0), bus_(SUPER, SUPERV_HandleMPIEOnMRET), 1);
-      Emit(ctx, bus_(&RV->MSTATUS,1), bus_(HYPER,0x18<<8|HYPER_BIC), 1);
+      Emit(ctx, bus_(&RV->MSTATUS,1), bus_(HYPER,0xe7<<16|HYPER_AND), 1);
 
       // MIE is 1<<3, MPIE is 1<<7.
       

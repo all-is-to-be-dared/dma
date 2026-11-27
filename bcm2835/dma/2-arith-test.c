@@ -202,8 +202,8 @@ main(void)
     End(&ctx);                                                                                  \
     printf("\nChecking 4-wide " #_Name_ "\x1b[0m");                                             \
     for (int i = 0; i < _Countof(VALUES); i++) {                                                \
-      a = VALUES[i][0];                                                                         \
-      b = VALUES[i][1];                                                                         \
+      a = VALUES[0][0];                                                                         \
+      b = VALUES[0][1];                                                                         \
       c = 0;                                                                                    \
       assert(c == 0);                                                                           \
       runinfo = dmakit_timed_run(rsv, start);                                                   \

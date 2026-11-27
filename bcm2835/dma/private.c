@@ -68,8 +68,10 @@ _mono_get_or_init_ctx(struct mono_ctx *c, size_t ks, size_t vs)
   //     return c;
   //   c = c->next;
   // }
-  if(!c->inited)
-    c->inited = true;
+  if(c->inited)
+    return;
+
+  c->inited = true;
 
   // printf("!context not found!\n");
   // assert(curr_context < MAX_CONTEXT);
