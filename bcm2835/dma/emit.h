@@ -334,3 +334,8 @@ static inline void arena_reset(arena *a)
 }
 
 extern arena ARENA;
+
+
+
+
+uint64_t dma_get_launch_overhead(emit_ctx *ctx, struct dmakit_reservation rsv);

@@ -127,17 +127,16 @@ _mono_set(struct mono_ctx* c, void* k, void* d)
 
 
 
-enum {
-  ARENA_SIZE = 1 << 20,
-};
-static uint8_t alignas(ARENA_SIZE) ARENA_BACKING[ARENA_SIZE];
-arena ARENA = {
-  .start = ARENA_BACKING,
-  .p = ARENA_BACKING,
-  .end = ARENA_BACKING + (ARENA_SIZE),
-  .util = 0,
-};
-
+// enum {
+//   ARENA_SIZE = 1 << 20,
+// };
+// static uint8_t alignas(ARENA_SIZE) ARENA_BACKING[ARENA_SIZE];
+// arena ARENA = {
+//   .start = ARENA_BACKING,
+//   .p = ARENA_BACKING,
+//   .end = ARENA_BACKING + (ARENA_SIZE),
+//   .util = 0,
+// };
 
 
 
@@ -227,4 +226,53 @@ uint64_t dma_run_info_get_time_ns(struct dma_run_info info)
   T /= arm_freq;
 
   return T;
+}
+
+
+
+
+
+uint64_t dma_get_launch_overhead(emit_ctx *ctx, struct dmakit_reservation rsv)
+{
+  enum {
+    TIMING_COUNT = 256,
+  };
+  uint64_t oh_3x, oh_6x, overhead;
+  struct dma_run_info runinfo;
+
+  cblk *start = Here(ctx);
+  EmitWith(ctx, TI_DST_IGN, bus(0), bus(0), 0);
+  EmitWith(ctx, TI_DST_IGN, bus(0), bus(0), 0);
+  EmitWith(ctx, TI_DST_IGN, bus(0), bus(0), 0);
+  End(ctx);
+  (void)dmakit_timed_run(rsv, start);
+  (void)dmakit_timed_run(rsv, start);
+  (void)dmakit_timed_run(rsv, start);
+  oh_3x = 0;
+  for (int i = 0; i < TIMING_COUNT; i++) {
+    runinfo = dmakit_timed_run(rsv, start);
+    oh_3x += dma_run_info_get_time_ns(runinfo);
+  }
+  oh_3x /= TIMING_COUNT;
+  start = Here(ctx);
+  EmitWith(ctx, TI_DST_IGN, bus(0), bus(0), 0);
+  EmitWith(ctx, TI_DST_IGN, bus(0), bus(0), 0);
+  EmitWith(ctx, TI_DST_IGN, bus(0), bus(0), 0);
+  EmitWith(ctx, TI_DST_IGN, bus(0), bus(0), 0);
+  EmitWith(ctx, TI_DST_IGN, bus(0), bus(0), 0);
+  EmitWith(ctx, TI_DST_IGN, bus(0), bus(0), 0);
+  End(ctx);
+  (void)dmakit_timed_run(rsv, start);
+  (void)dmakit_timed_run(rsv, start);
+  (void)dmakit_timed_run(rsv, start);
+  oh_6x = 0;
+  for (int i = 0; i < TIMING_COUNT; i++) {
+    runinfo = dmakit_timed_run(rsv, start);
+    oh_6x += dma_run_info_get_time_ns(runinfo);
+  }
+  oh_6x /= TIMING_COUNT;
+
+  overhead = oh_3x - (oh_6x - oh_3x);
+
+  return overhead;
 }

@@ -46,6 +46,8 @@ stdevlf(const uint64_t *d, size_t n)
   return __builtin_sqrt((double)acc / (double)n - mean * mean);
 }
 
+arena ARENA;
+
 void
 main(void)
 {
@@ -83,16 +85,16 @@ main(void)
   HYPER = (void *)0x10000000;
   QHAT = HYPER + (1 << 24);
   RHAT = QHAT + (1 << 24);
-  // enum {
-  //   ARENA_SIZE = 1 << 24,
-  // };
-  // volatile uint8_t  *ARENA_BACKING = RHAT + (ARENA_SIZE);
-  // ARENA = (arena){
-  //   .start = ARENA_BACKING,
-  //   .p = ARENA_BACKING,
-  //   .end = ARENA_BACKING + (ARENA_SIZE),
-  //   .util = 0,
-  // };
+  volatile uint8_t *ARENA_BACKING = RHAT + (1 << 24);
+  enum {
+    ARENA_SIZE = 1 << 24,
+  };
+  ARENA = (arena){
+    .start = (void*)ARENA_BACKING,
+    .p = (void*)ARENA_BACKING,
+    .end = (void*)ARENA_BACKING + (ARENA_SIZE),
+    .util = 0,
+  };
 
   dmakit_init_channels();
   struct dmakit_reservation rsv;
@@ -104,14 +106,24 @@ main(void)
   dmakit_dump_channel_reservations();
   printf("\n");
 
-
-
   uint32_t init_start = cycle_count_read(), init_end;
   run_initializers(); // run all the magic INITIALIZERs
   init_end = cycle_count_read();
   printf("initializers ran in %dcy\n", init_end - init_start);
 
   // --- THING ---
+
+  enum {
+    BLOCK_CNT = 32768,
+  };
+  static cblk blocks[BLOCK_CNT];
+  emit_ctx ctx = { .base = blocks, .p=blocks, .cap=BLOCK_CNT };
+
+  uint64_t overhead = dma_get_launch_overhead(&ctx, rsv);
+
+  printf("Basal overhead (1xDST_IGN): %lldns\n", overhead);
+
+  // RISC-V emulation tests go here
   
   printf("Finished.\n");
 
